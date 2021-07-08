@@ -1,0 +1,731 @@
+﻿{
+  "paragraphs": [
+    {
+      "title": "Create Scala UDF to generate sentiment info from text",
+      "text": "%flink(parallelism=1)\n\nimport java.util.Properties\nimport java.util.UUID\nimport org.apache.flink.streaming.api.scala._\nimport org.apache.flink.table.functions.FunctionContext\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\n\n// note the namespace for the kinesis connector\nimport software.amazon.kinesis.connectors.flink.FlinkKinesisProducer\nimport software.amazon.kinesis.connectors.flink.config.AWSConfigConstants\nimport software.amazon.kinesis.connectors.flink.KinesisPartitioner\n\n// pull in awssdk\nimport software.amazon.awssdk.services.comprehend.ComprehendClient;\nimport software.amazon.awssdk.regions.Region;\nimport software.amazon.awssdk.services.comprehend.model.ComprehendException;\nimport software.amazon.awssdk.services.comprehend.model.DetectSentimentRequest;\nimport software.amazon.awssdk.services.comprehend.model.DetectSentimentResponse;\n\nclass ScalaSentiment extends ScalarFunction {\n  private var comprehend: ComprehendClient = null\n  \n  override def open(context: FunctionContext): Unit = {\n      var region = Region.US_EAST_1;\n      comprehend = ComprehendClient.builder()\n                .region(region)\n                .build()\n  }\n  \n  override def close(): Unit = {\n      if(comprehend != null) {\n          comprehend.close()\n          comprehend = null\n      }\n  }\n\n  def eval(str: String): String = {\n      var request = DetectSentimentRequest.builder()\n                .text(str)\n                .languageCode(\"en\")\n                .build()\n    \n      var retVal = \"ERROR\"\n      try {\n        var detectSentimentResult = comprehend.detectSentiment(request)\n        retVal = detectSentimentResult.sentimentAsString()\n      } catch { case _: Throwable => }\n      \n      retVal\n  }\n}\nbtenv.registerFunction(\"scala_sentiment\", new ScalaSentiment())",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T14:34:12+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/scala",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "import java.util.Properties\nimport java.util.UUID\nimport org.apache.flink.streaming.api.scala._\nimport org.apache.flink.table.functions.FunctionContext\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\nimport software.amazon.kinesis.connectors.flink.FlinkKinesisProducer\nimport software.amazon.kinesis.connectors.flink.config.AWSConfigConstants\nimport software.amazon.kinesis.connectors.flink.KinesisPartitioner\nimport software.amazon.awssdk.services.comprehend.ComprehendClient\nimport software.amazon.awssdk.regions.Region\nimport software.amazon.awssdk.services.comprehend.model.ComprehendException\nimport software.amazon.awssdk.services.comprehend.model.DetectSentimentRequest\nimport software.amazon.awssdk.services.comprehend.model.DetectSentimentResponse\ndefined class ScalaSentiment\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621779806743_795130689",
+      "id": "paragraph_1621779806743_795130689",
+      "dateCreated": "2021-05-23T14:23:26+0000",
+      "dateStarted": "2021-05-23T14:34:12+0000",
+      "dateFinished": "2021-05-23T14:34:28+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:2162"
+    },
+    {
+      "title": "Create a Kinesis table source",
+      "text": "%flink.ssql\n\nDROP TABLE IF EXISTS source_kinesis_reviews;\n\n-- Since metadata fields are not available in 1.11, we have to\n-- come up with a way to generate timestamps that we can use\n-- for watermarking\nCREATE TABLE source_kinesis_reviews (\n    marketplace STRING,\n    customer_id STRING,\n    review_id STRING,\n    product_id STRING,\n    product_parent STRING,\n    product_title STRING,\n    product_category STRING,\n    star_rating INT,\n    helpful_votes INT,\n    total_votes INT,\n    vine STRING,\n    verified_purchase STRING,\n    review_headline STRING,\n    review_body STRING,\n    review_date STRING,\n    ingest_time BIGINT,\n    --sentiment AS scala_sentiment(review_body),\n    event_ts AS TO_TIMESTAMP(FROM_UNIXTIME(COALESCE(ingest_time, UNIX_TIMESTAMP())/1000, 'yyyy-MM-dd HH:mm:ss')),\n    WATERMARK FOR event_ts AS event_ts - INTERVAL '5' SECOND\n)\nPARTITIONED BY (product_id)\nWITH (\n    'connector'= 'kinesis',\n    'stream' = 'paperboatteststream2',\n    'format' = 'csv',\n    'csv.field-delimiter' = U&'\\0009',\n    'csv.ignore-parse-errors' = 'true',\n    'scan.shard.getrecords.maxretries' = '100',\n    'aws.region' = 'us-east-1',\n    'scan.stream.initpos' = 'AT_TIMESTAMP',\n    'scan.stream.initpos-timestamp' = '2021-05-24T18:20:25.000-00:00' -- we'll use a timestamp so we can keep replaying the data we published above\n)\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-24T18:22:48+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "Table has been dropped.\nTable has been created.\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621779745799_438619091",
+      "id": "paragraph_1621779745799_438619091",
+      "dateCreated": "2021-05-23T14:22:25+0000",
+      "dateStarted": "2021-05-24T18:22:48+0000",
+      "dateFinished": "2021-05-24T18:23:04+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:2163"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=1000, parallelism=1, threshold=60000)\n\nselect TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, star_rating, count(1) as star_count\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), star_rating\norder by start_time desc, star_rating asc\nlimit 5;",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-24T18:26:34+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "multiBarChart",
+              "height": 300,
+              "optionOpen": true,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "start_time": "string",
+                      "star_rating": "string",
+                      "star_count": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                },
+                "multiBarChart": {
+                  "xLabelStatus": "default"
+                }
+              },
+              "commonSetting": {},
+              "keys": [
+                {
+                  "name": "star_rating",
+                  "index": 1,
+                  "aggr": "sum"
+                }
+              ],
+              "groups": [],
+              "values": [
+                {
+                  "name": "star_count",
+                  "index": 2,
+                  "aggr": "sum"
+                }
+              ]
+            },
+            "helium": {}
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "start_time\tstar_rating\tstar_count\n2021-05-24 18:24:14.0\t5\t2648\n2021-05-24 18:24:14.0\t2\t135\n2021-05-24 18:24:14.0\t4\t474\n2021-05-24 18:24:14.0\t1\t254\n2021-05-24 18:24:14.0\t3\t238\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, star_rating, count(1) as star_count\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), star_rating\norder by start_time desc, star_rating asc\nlimit 5\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 3975cacfdf9d2be28f98f10f747f42e4)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 3975cacfdf9d2be28f98f10f747f42e4)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/3975cacfdf9d2be28f98f10f747f42e4",
+              "$$hashKey": "object:13355"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621779885480_1722624691",
+      "id": "paragraph_1621779885480_1722624691",
+      "dateCreated": "2021-05-23T14:24:45+0000",
+      "dateStarted": "2021-05-24T18:25:52+0000",
+      "dateFinished": "2021-05-24T18:27:03+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2164"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=1000, parallelism=1, threshold=60000)\n\nselect TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, scala_sentiment(review_body) as sentiment, count(1) as star_count\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), scala_sentiment(review_body)\norder by start_time desc, sentiment asc\nlimit 5;",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T16:42:49+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "start_time": "string",
+                      "sentiment": "string",
+                      "star_count": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "start_time\tsentiment\tstar_count\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, scala_sentiment(review_body) as sentiment, count(1) as star_count\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), scala_sentiment(review_body)\norder by start_time desc, sentiment asc\nlimit 5\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: f517311a948679cdaa1cd5616f6574bb)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: f517311a948679cdaa1cd5616f6574bb)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/f517311a948679cdaa1cd5616f6574bb",
+              "$$hashKey": "object:2447"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621781506097_1718509117",
+      "id": "paragraph_1621781506097_1718509117",
+      "dateCreated": "2021-05-23T14:51:46+0000",
+      "dateStarted": "2021-05-23T15:00:57+0000",
+      "dateFinished": "2021-05-23T15:09:18+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2165"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=2000, parallelism=1)\n\nselect customer_id, review_id, review_body, scala_sentiment(review_body) as sentiment, star_rating from source_kinesis_reviews order by review_id limit 10;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-24T18:27:44+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "customer_id": "string",
+                      "review_id": "string",
+                      "review_body": "string",
+                      "sentiment": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "customer_id\treview_id\treview_body\tsentiment\n12612039\tR100C9WJSEH7NB\tGreat gift!\tPOSITIVE\n133210\tR104YIANJHT42\tAwesome product\tPOSITIVE\n14347830\tR100ZIHZJNXKMK\tProduct as described.  Great taste and perfect to add to smoothies.\tPOSITIVE\n19484448\tR102DO92CO0ZC0\tWorked exactly as expected , could have been a bit cheaper but I did order from Canada\tMIXED\n32138061\tR101OH1JM3L08F\tLOVE THIS STUFF\tPOSITIVE\n37005761\tR101WJ70FJVYNP\tNice pill organizer. Works as advertised.\tPOSITIVE\n43977289\tR100ABAUWTYA1\tI have been using these for over a year now. Some days I can take 19 pills so I went with the large and everything fits perfect.  I'm buying the small for the couple pills I have to take in the mornings.<br /><br />It is constructed of a very hard plastic that is quite sturdy.  I think the reviews that complained about cracked threads didn't line up the threads right and forced it. Every couple of months I dab a tiny bit of Vaseline on the threads to keep them screwing smoothly.<br /><br />If you found this review helpful, please let me know by clucking &#34;Yes&#34;.  Than you!\tPOSITIVE\n46390326\tR108ZMKGTO4VNK\tI read the reviews about this book and how negative they were but i ordered it used anyway - it was very cheap. I was surprised that it was not nearly as bad as everyone made it out to be, granted i could see the way it was going to end - it is very clearly foreshadowed. But it is nowhere near the worse Star Wars novel i have read. It takes a little to get into but still i found it to be a decent novel.\tMIXED\n48189497\tR106WFZ7O3KBZX\tRiley is a young girl with the world on her shoulders.  She is trying to make everyone proud of her in this she is making trouble.  See Riley is a trying to follow in her father's foot steps....she is trying to become a demon trapper.  In this book the would has gone to hell....literally....Lucifer is on Earth and he is releasing demons to go bump in the night.  But see there is a snag in Riley's plan, something has happened to Riley that she will never forget.....her father dies.<br /><br />Now Riley is more determined to make her dad proud and become a demon trapper.  But something is standing her way....her feelings for someone.  Well that someone was her father's partner and is now her trainer.<br /><br />This book was kind of amazing.  This book has everything that you need to fall into a world that just wraps you in and does not let you out.  It was a perfect mixture of excitement, love, and tragedy.  I think that Jana Oliver really out did herself and made a world that is both scary and thrilling.  So thank you Jana, you did a great job!!!\tNEUTRAL\n52453450\tR105ODTM8ZORJD\tI no longer use liquid broth after discovering these.\tPOSITIVE\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select customer_id, review_id, review_body, scala_sentiment(review_body) as sentiment from source_kinesis_reviews order by review_id limit 10\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 9f0d7872cf55cdb74db8b3620da6e791)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 9f0d7872cf55cdb74db8b3620da6e791)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/9f0d7872cf55cdb74db8b3620da6e791",
+              "$$hashKey": "object:13371"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621781982337_314320069",
+      "id": "paragraph_1621781982337_314320069",
+      "dateCreated": "2021-05-23T14:59:42+0000",
+      "dateStarted": "2021-05-23T15:28:24+0000",
+      "dateFinished": "2021-05-23T15:29:18+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2166"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=1000, parallelism=1, threshold=60000)\n\nselect TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, sentiment, star_rating, count(1) as star_count\nfrom\n(\nselect *, scala_sentiment(review_body) as sentiment from source_kinesis_reviews\n)\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), sentiment, star_rating\norder by start_time desc, sentiment asc\nlimit 5;",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T17:26:24+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "start_time": "string",
+                      "sentiment": "string",
+                      "star_rating": "string",
+                      "star_count": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "start_time\tsentiment\tstar_rating\tstar_count\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, sentiment, star_rating, count(1) as star_count\nfrom\n(\nselect *, scala_sentiment(review_body) as sentiment from source_kinesis_reviews\n)\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND), sentiment, star_rating\norder by start_time desc, sentiment asc\nlimit 5\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 5e646ec2f9c22ca53c8caf2475367e12)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 5e646ec2f9c22ca53c8caf2475367e12)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/5e646ec2f9c22ca53c8caf2475367e12",
+              "$$hashKey": "object:2535"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621783704657_1274229334",
+      "id": "paragraph_1621783704657_1274229334",
+      "dateCreated": "2021-05-23T15:28:24+0000",
+      "dateStarted": "2021-05-23T16:07:19+0000",
+      "dateFinished": "2021-05-23T16:43:20+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2167"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=1000, parallelism=1, threshold=60000)\n\nselect TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, LAST_VALUE(review_body) review_body_sample\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND)\norder by start_time desc\nlimit 5;",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T17:26:24+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "start_time": "string",
+                      "review_body_sample": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "start_time\treview_body_sample\n2021-05-23 14:43:08.0\tI drink my one cup of coffee each morning \\\\\"bulletproof\\\\\" style---meaning I add a tablespoon of pastured butter and a tablespoon of coconut oil to it, in addition to a teaspoon of unsweetened cocoa and about a half cup of pastured whole milk (as part of a high-fat diet), so what I need is coffee with a strong enough flavor that cuts through those three extra ingredients...and am quite happy with this stuff for that purpose!<br /><br />Those coffee geeks who pooh-pooh Starbucks coffee for being \\\\\"over-burnt\\\\\" probably drink it straight, is my guess.  Anyway, my local Cos tco had this 40oz bag for a mere fifteen bucks, amazing bargain.  Even at the usual price of twenty bucks it's still a great buy compared to your local supermarket.<br /><br />UPDATE 2/18/2015<br />Well, after about two months of drinking Peet's whole bean coffee, I went back to this Starbucks brand mainly because my local Costco had it for so cheap.  And guess what, I now *do* feel and taste a difference: this coffee is far less flavorful and packs a weaker caffeine dose than Peet's!  The latter is probably due to it being a dark roast whereas Peet's was a medium roast which objectively contains more caffeine.  But after getting used to Peet's, this Starbucks coffee now tastes thin and somewhat unpleasant/acrid.<br /><br />Changed rating from 5 to 3 stars.\n2021-05-23 14:43:09.0\tThe book has a complete dissection of a frog, but not of the sheep's eye and brain even though it advertises that it includes those.  We had purchased a dissection kit to go with the book and we disappointed that the book was not as it appeared.\n2021-05-23 14:43:10.0\tGreat; Thanks !\n2021-05-23 14:43:11.0\tThis is the best price I have found for K-Cups and the quality of the coffee is outstanding.  If you are looking for a good deal and great quality look no further.  You do have to buy a large quantity but 3 of us in my office split it and it works out perfect.  Highly recommended.\n2021-05-23 14:43:12.0\tThe product is great. However, it was not packed with any protection and arrived damaged. I buy these every month and usually everything is fine. Maybe they were in a hurry this time..\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select TUMBLE_START(event_ts, INTERVAL '1' SECOND)as start_time, LAST_VALUE(review_body) review_body_sample\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '1' SECOND)\norder by start_time desc\nlimit 5\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 49e3e4e1a4c9ee5e9d3622237def2dde)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 49e3e4e1a4c9ee5e9d3622237def2dde)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/49e3e4e1a4c9ee5e9d3622237def2dde",
+              "$$hashKey": "object:2579"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621785820361_1844614847",
+      "id": "paragraph_1621785820361_1844614847",
+      "dateCreated": "2021-05-23T16:03:40+0000",
+      "dateStarted": "2021-05-23T17:18:52+0000",
+      "dateFinished": "2021-05-23T17:21:21+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2168"
+    },
+    {
+      "text": "%flink.ssql(type=update, refreshInterval=5000, parallelism=1, threshold=60000)\n\nselect start_time, review_body, scala_sentiment(review_body) as sentiment, star_rating\nfrom\n(\nselect TUMBLE_START(event_ts, INTERVAL '5' SECOND)as start_time, LAST_VALUE(review_body) as review_body, LAST_VALUE(star_rating) as star_rating\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '5' SECOND)\norder by start_time desc\nlimit 50\n)",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-24T18:48:51+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "multiBarChart",
+              "height": 300,
+              "optionOpen": true,
+              "setting": {
+                "multiBarChart": {
+                  "rotate": {
+                    "degree": "-45"
+                  },
+                  "xLabelStatus": "default"
+                }
+              },
+              "commonSetting": {},
+              "keys": [
+                {
+                  "name": "star_rating",
+                  "index": 3,
+                  "aggr": "count"
+                }
+              ],
+              "groups": [
+                {
+                  "name": "sentiment",
+                  "index": 2,
+                  "aggr": "sum"
+                }
+              ],
+              "values": [
+                {
+                  "name": "sentiment",
+                  "index": 2,
+                  "aggr": "count"
+                }
+              ]
+            },
+            "helium": {}
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "start_time\treview_body\tsentiment\tstar_rating\n2021-05-24 18:23:00.0\tBest sweetener for me.\tPOSITIVE\t5\n2021-05-24 18:23:05.0\tIt's nice to have a variety pack when you're trying something new, but I have to say that not all of the flavors were equally tasty. I tended to prefer the spicy options, the others seemed a bit bland and dull.\tMIXED\t3\n2021-05-24 18:23:10.0\tIt's not that this didn't work, I just found it really gross to slather this oily balm all over. I think a spray is much more user friendly\tNEGATIVE\t3\n2021-05-24 18:23:15.0\tBest hot chocolate ever!\tPOSITIVE\t5\n2021-05-24 18:23:20.0\tKerr has written another compelling Gunther story.  The plot was wickedly tight and twisted, the characters came out of history with the stench of Nazism on them.<br /><br />These novels are horrifying and impossible to put down.  One of the most striking element is the plausibility and realism in the way that Kerr intertwines history with his story.  His research efforts show in the way he sets the stage.<br /><br />I'm now waiting impatiently for the next episode in Bernie's life.<br /><br />Thanks Mr Kerr.\tPOSITIVE\t5\n2021-05-24 18:23:25.0\tI bought this because it said it was a paperback.  Although technically true, it was a typed manuscript, almost illegible because of the faint print.  It was definitely not a book.  We ended up throwing it away.  I offered to return it to the bookseller, but was told not to; however, I did get a refund.\tNEGATIVE\t1\n2021-05-24 18:23:30.0\tThe best GF sandwich bread!\tPOSITIVE\t5\n2021-05-24 18:23:35.0\tIf you are a therapist, clinician, counselor, peer supports person - or any other professional in helping / social services - Evan's book is a must have in your library to help you understand the Anger Cycle and what is really happening \\\\\"Inside the Mind of an Angry Man'. Most of all Evan walks the talk. He is a consummate professional and clinician who understands from his own journey that men can, and do,  heal. Get this book and share it with all your colleagues. Evan is also going to be at the conferences in Georgia and the southeast this year. Go hear him.  No doubt he will sign it for you.\tPOSITIVE\t5\n2021-05-24 18:23:40.0\tDelicious.\tPOSITIVE\t5\n2021-05-24 18:23:45.0\tBest popcorn chips on the market, Always fresh and crisp. You can`t go wrong with these.\tPOSITIVE\t5\n2021-05-24 18:23:50.0\tGood product and to use for user and far easy to order through Amazon without leaving home.\tPOSITIVE\t5\n2021-05-24 18:23:55.0\tTastes terrible.  I've got 29 more servings to go.  Didn't really feel the effects of the caffeine but I'm usually drinking 5 cups of coffee a day.\tNEGATIVE\t2\n2021-05-24 18:24:00.0\tGOOD BUY!\tPOSITIVE\t5\n2021-05-24 18:24:05.0\tWhat a great concept for a book!  We all have been in that position at one time or another in our lives.  It was so well put together even though there were so many variables in the letters.  I think it is the perfect read for somebody who is busy and wants to spend just a few minutes a day reading something interesting.  Whenever I had a few extra minutes I would pull out the book and read one or two letters and then I could put it down, go about my everyday chores and still have my mind occupied on what I had read.  Great job, Jackie.\tPOSITIVE\t5\n2021-05-24 18:24:10.0\tlove this stuff.  it is not a thick syrup but more like water constancy.  does not effect the texture of the drink.  I use it pretty much only in coffee and it adds nice flavor.  I go through a 4 pack in about 2 months.\tPOSITIVE\t5\n2021-05-24 18:24:15.0\tThese were very good.  Better quality than any of the others I've had.\tPOSITIVE\t5\n2021-05-24 18:24:20.0\tVery good pu-erh tea, if not over-the-top. Fast delivery, nice packaging. I'll likely order this again.\tPOSITIVE\t4\n2021-05-24 18:24:25.0\tThis is the autobiographical story of a basketball player who thought he was NBA bound.  I guess he already knows better before college but the realization takes a while to sink in.  The timeline is his four years at Ohio State.<br /><br />The first third of the book is very funny and raunchy.  As he realizes his destiny is to be a bench warmer the story starts to drag a bit but is still entertaining.<br /><br />So, the first third is \\\\\"can't put it down\\\\\".  That drifts you past half way.  Then you start to check how long each chapter is hoping the next one is better.  About 80% through it picks up again and ends much better.  33% gets 5 stars, 47% gets 2.5 stars and 20% gets 4 stars.<br /><br />This cycle is probably true of everyone's college experience where your freshman year is exciting, new and memorable.  The senior year is also usually memorable in a different way.  The sophomore and junior years are forgetful.\tPOSITIVE\t4\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: select start_time, review_body, scala_sentiment(review_body) as sentiment, star_rating\nfrom\n(\nselect TUMBLE_START(event_ts, INTERVAL '5' SECOND)as start_time, LAST_VALUE(review_body) as review_body, LAST_VALUE(star_rating) as star_rating\nfrom source_kinesis_reviews\ngroup by TUMBLE(event_ts, INTERVAL '5' SECOND)\norder by start_time desc\nlimit 50\n)\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: a371a31ecb692f3fe7a26da3313af3de)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: a371a31ecb692f3fe7a26da3313af3de)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/a371a31ecb692f3fe7a26da3313af3de",
+              "$$hashKey": "object:20842"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621789736990_613819423",
+      "id": "paragraph_1621789736990_613819423",
+      "dateCreated": "2021-05-23T17:08:56+0000",
+      "dateStarted": "2021-05-24T18:46:47+0000",
+      "dateFinished": "2021-05-24T18:48:15+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:2169"
+    },
+    {
+      "text": "%flink.ssql\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T17:21:57+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/sql"
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621790517873_828199487",
+      "id": "paragraph_1621790517873_828199487",
+      "dateCreated": "2021-05-23T17:21:57+0000",
+      "status": "READY",
+      "$$hashKey": "object:2170"
+    }
+  ],
+  "name": "simple-sentiment-analysis",
+  "id": "2G5GJFJ9V",
+  "defaultInterpreterGroup": "flink",
+  "version": "0.9.0",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": false,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {},
+  "path": "/simple-sentiment-analysis"
+}

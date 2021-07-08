@@ -1,0 +1,24 @@
+# Overall script
+
+1. Scenario
+    a. Customer reviews being generated in real-time
+    b. We'd like to do sentiment analysis in near real-time
+2. Go over architecture and provide a quick backgrounder on each service
+    a. Kinesis Data Streams
+    b. Kinesis Data Analytics Studio and Flink
+    c. Amazon Comprehend
+3. Deeper dive 
+    a. Data generation and customer reviews dataset
+    b. Mention permissions for KDA Studio (KDS, Glue, Comprehend, S3)
+    c. Simple queries showcasing real-time querying with KDA Studio and Flink
+    d. Scala UDF for calling Amazon Comprehend
+    e. Query showcasing use of Amazon Comprehend
+    f. Caveat: explain async io for making external calls
+4. Additional use cases and next steps
+    a. Other capabilities within Amazon ML services - such as PII redaction, translation, etc..
+    b. Deploying notebook as app
+5. Pricing
+    a. Pricing for Kinesis Data Streams
+    b. Pricing for Kinesis Data Analytics Studio
+    c. Pricing for Amazon Comprehend
+6. Summary

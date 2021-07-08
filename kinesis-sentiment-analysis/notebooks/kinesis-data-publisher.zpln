@@ -1,0 +1,108 @@
+﻿{
+  "paragraphs": [
+    {
+      "title": "Publish to Kinesis from Amazon customer review dataset in S3",
+      "text": "%flink(parallelism=1)\n\nimport java.util.Properties\nimport java.util.UUID\nimport org.apache.flink.streaming.api.scala._\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\n\n// note the namespace for the kinesis connector\nimport software.amazon.kinesis.connectors.flink.FlinkKinesisProducer\nimport software.amazon.kinesis.connectors.flink.config.AWSConfigConstants\nimport software.amazon.kinesis.connectors.flink.KinesisPartitioner\n\n// kinesis producer config\nval producerConfig = new Properties()\nproducerConfig.put(AWSConfigConstants.AWS_REGION, \"us-east-1\")\n\nval kinesis = new FlinkKinesisProducer[String](new SimpleStringSchema, producerConfig)\nkinesis.setFailOnError(false)\nkinesis.setDefaultStream(\"paperboatteststream2\")\n\n// spray data across all available shards\nkinesis.setCustomPartitioner(new KinesisPartitioner[String]() {\n    override def getPartitionId(s: String): String = {\n        // we dont' care about shard affinity in this app\n\t\tUUID.randomUUID().toString()\n    }\n})\n\nval bsSettings = EnvironmentSettings.newInstance().useBlinkPlanner().inStreamingMode().build()\nval st_env = StreamTableEnvironment.create(senv, bsSettings)\n\n// senv is the streaming environment\n// Let's use the Amazon customer review dataset\nval personalCareData = senv.readTextFile(\"s3://amazon-reviews-pds/tsv/amazon_reviews_us_Personal_Care_Appliances_v1_00.tsv.gz\")\nval bookData = senv.readTextFile(\"s3://amazon-reviews-pds/tsv/amazon_reviews_us_Books_v1_01.tsv.gz\")\nval groceryData = senv.readTextFile(\"s3://amazon-reviews-pds/tsv/amazon_reviews_us_Grocery_v1_00.tsv.gz\")\n\n// Union them into a single stream\nval data = bookData.union(personalCareData, groceryData)\n\n// Since metadata fields are not available in 1.11, we have to\n// come up with a way to generate timestamps that we can use\n// for watermarking\nval dataWithIngestTime = data.map(v => {\n    v + \"\\t\" + System.currentTimeMillis()\n})\n\ndataWithIngestTime.addSink(kinesis)\n\nsenv.execute()",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T14:40:29+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/scala",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "import java.util.Properties\nimport java.util.UUID\nimport org.apache.flink.streaming.api.scala._\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\nimport software.amazon.kinesis.connectors.flink.FlinkKinesisProducer\nimport software.amazon.kinesis.connectors.flink.config.AWSConfigConstants\nimport software.amazon.kinesis.connectors.flink.KinesisPartitioner\n\u001b[1m\u001b[34mproducerConfig\u001b[0m: \u001b[1m\u001b[32mjava.util.Properties\u001b[0m = {}\n\u001b[1m\u001b[34mres134\u001b[0m: \u001b[1m\u001b[32mObject\u001b[0m = null\n\u001b[1m\u001b[34mkinesis\u001b[0m: \u001b[1m\u001b[32msoftware.amazon.kinesis.connectors.flink.FlinkKinesisProducer[String]\u001b[0m = software.amazon.kinesis.connectors.flink.FlinkKinesisProducer@401438cb\n\u001b[1m\u001b[34mbsSettings\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.table.api.EnvironmentSettings\u001b[0m = org.apache.flink.table.api.EnvironmentSettings@4ce30b05\n\u001b[1m\u001b[34mst_env\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.table.api.bridge.scala.StreamTableEnvironment\u001b[0m = org.apache.flink.table.api.bridge.scala.internal.StreamTableEnvironmentImpl@c6de2b4\n\u001b[1m\u001b[34mpersonalCareData\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.DataStream[String]\u001b[0m = org.apache.flink.streaming.api.scala.DataStream@61934edc\n\u001b[1m\u001b[34mbookData\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.DataStream[String]\u001b[0m = org.apache.flink.streaming.api.scala.DataStream@2ee3f15\n\u001b[1m\u001b[34mgroceryData\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.DataStream[String]\u001b[0m = org.apache.flink.streaming.api.scala.DataStream@3934b8f7\n\u001b[1m\u001b[34mdata\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.DataStream[String]\u001b[0m = org.apache.flink.streaming.api.scala.DataStream@26d9fb89\n\u001b[1m\u001b[34mdataWithIngestTime\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.DataStream[String]\u001b[0m = org.apache.flink.streaming.api.scala.DataStream@6fe3eb2a\n\u001b[1m\u001b[34mres145\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.datastream.DataStreamSink[String]\u001b[0m = org.apache.flink.streaming.api.datastream.DataStreamSink@29b795c6\norg.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: 1fde488fe5840995307c602c7a47ddf9)\n  at org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n  at java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n  at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n  at java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n  at org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n  at java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n  at java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n  at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n  at java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n  at org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n  at java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n  at java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n  at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n  at java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n  at java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n  at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n  at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n  at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n  at java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: org.apache.flink.runtime.client.JobExecutionException: Job execution failed.\n  at org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:147)\n  at org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n  ... 18 more\nCaused by: org.apache.flink.util.SerializedThrowable: Recovery is suppressed by NoRestartBackoffTimeStrategy\n  at org.apache.flink.runtime.executiongraph.failover.flip1.ExecutionFailureHandler.handleFailure(ExecutionFailureHandler.java:116)\n  at org.apache.flink.runtime.executiongraph.failover.flip1.ExecutionFailureHandler.getFailureHandlingResult(ExecutionFailureHandler.java:78)\n  at org.apache.flink.runtime.scheduler.DefaultScheduler.handleTaskFailure(DefaultScheduler.java:198)\n  at org.apache.flink.runtime.scheduler.DefaultScheduler.maybeHandleTaskFailure(DefaultScheduler.java:191)\n  at org.apache.flink.runtime.scheduler.DefaultScheduler.updateTaskExecutionStateInternal(DefaultScheduler.java:185)\n  at org.apache.flink.runtime.scheduler.SchedulerBase.updateTaskExecutionState(SchedulerBase.java:520)\n  at org.apache.flink.runtime.jobmaster.JobMaster.updateTaskExecutionState(JobMaster.java:394)\n  at jdk.internal.reflect.GeneratedMethodAccessor108.invoke(Unknown Source)\n  at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n  at java.base/java.lang.reflect.Method.invoke(Method.java:566)\n  at org.apache.flink.runtime.rpc.akka.AkkaRpcActor.handleRpcInvocation(AkkaRpcActor.java:284)\n  at org.apache.flink.runtime.rpc.akka.AkkaRpcActor.handleRpcMessage(AkkaRpcActor.java:199)\n  at org.apache.flink.runtime.rpc.akka.FencedAkkaRpcActor.handleRpcMessage(FencedAkkaRpcActor.java:74)\n  at org.apache.flink.runtime.rpc.akka.AkkaRpcActor.handleMessage(AkkaRpcActor.java:152)\n  at akka.japi.pf.UnitCaseStatement.apply(CaseStatements.scala:26)\n  at akka.japi.pf.UnitCaseStatement.apply(CaseStatements.scala:21)\n  at scala.PartialFunction.applyOrElse(PartialFunction.scala:123)\n  at scala.PartialFunction.applyOrElse$(PartialFunction.scala:122)\n  at akka.japi.pf.UnitCaseStatement.applyOrElse(CaseStatements.scala:21)\n  at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:171)\n  at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:172)\n  at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:172)\n  at akka.actor.Actor.aroundReceive(Actor.scala:517)\n  at akka.actor.Actor.aroundReceive$(Actor.scala:515)\n  at akka.actor.AbstractActor.aroundReceive(AbstractActor.scala:225)\n  at akka.actor.ActorCell.receiveMessage(ActorCell.scala:592)\n  at akka.actor.ActorCell.invoke(ActorCell.scala:561)\n  at akka.dispatch.Mailbox.processMailbox(Mailbox.scala:258)\n  at akka.dispatch.Mailbox.run(Mailbox.scala:225)\n  at akka.dispatch.Mailbox.exec(Mailbox.scala:235)\n  at akka.dispatch.forkjoin.ForkJoinTask.doExec(ForkJoinTask.java:260)\n  at akka.dispatch.forkjoin.ForkJoinPool$WorkQueue.runTask(ForkJoinPool.java:1339)\n  at akka.dispatch.forkjoin.ForkJoinPool.runWorker(ForkJoinPool.java:1979)\n  at akka.dispatch.forkjoin.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:107)\nCaused by: org.apache.flink.util.SerializedThrowable: The child process has been shutdown and can no longer accept messages.\n  at software.amazon.kinesis.shaded.com.amazonaws.services.kinesis.producer.Daemon.add(Daemon.java:176)\n  at software.amazon.kinesis.shaded.com.amazonaws.services.kinesis.producer.KinesisProducer.addUserRecord(KinesisProducer.java:536)\n  at software.amazon.kinesis.connectors.flink.FlinkKinesisProducer.invoke(FlinkKinesisProducer.java:303)\n  at org.apache.flink.streaming.api.operators.StreamSink.processElement(StreamSink.java:56)\n  at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.pushToOperator(OperatorChain.java:717)\n  at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:692)\n  at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:672)\n  at org.apache.flink.streaming.api.operators.CountingOutput.collect(CountingOutput.java:52)\n  at org.apache.flink.streaming.api.operators.CountingOutput.collect(CountingOutput.java:30)\n  at org.apache.flink.streaming.api.operators.StreamMap.processElement(StreamMap.java:41)\n  at org.apache.flink.streaming.runtime.tasks.OneInputStreamTask$StreamTaskNetworkOutput.emitRecord(OneInputStreamTask.java:161)\n  at org.apache.flink.streaming.runtime.io.StreamTaskNetworkInput.processElement(StreamTaskNetworkInput.java:178)\n  at org.apache.flink.streaming.runtime.io.StreamTaskNetworkInput.emitNext(StreamTaskNetworkInput.java:153)\n  at org.apache.flink.streaming.runtime.io.StreamOneInputProcessor.processInput(StreamOneInputProcessor.java:67)\n  at org.apache.flink.streaming.runtime.tasks.StreamTask.processInput(StreamTask.java:346)\n  at org.apache.flink.streaming.runtime.tasks.mailbox.MailboxProcessor.runMailboxStep(MailboxProcessor.java:191)\n  at org.apache.flink.streaming.runtime.tasks.mailbox.MailboxProcessor.runMailboxLoop(MailboxProcessor.java:181)\n  at org.apache.flink.streaming.runtime.tasks.StreamTask.runMailboxLoop(StreamTask.java:566)\n  at org.apache.flink.streaming.runtime.tasks.StreamTask.invoke(StreamTask.java:537)\n  at org.apache.flink.runtime.taskmanager.Task.doRun(Task.java:724)\n  at org.apache.flink.runtime.taskmanager.Task.run(Task.java:549)\n  at java.base/java.lang.Thread.run(Thread.java:829)\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/1fde488fe5840995307c602c7a47ddf9",
+              "$$hashKey": "object:12976"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621779172387_1448453435",
+      "id": "paragraph_1621779172387_1448453435",
+      "dateCreated": "2021-05-23T14:12:52+0000",
+      "dateStarted": "2021-05-23T14:40:29+0000",
+      "dateFinished": "2021-05-23T14:56:15+0000",
+      "status": "ERROR",
+      "focus": true,
+      "$$hashKey": "object:12940"
+    },
+    {
+      "text": "%flink\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-05-23T14:20:37+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/scala"
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1621779637057_637693753",
+      "id": "paragraph_1621779637057_637693753",
+      "dateCreated": "2021-05-23T14:20:37+0000",
+      "status": "READY",
+      "$$hashKey": "object:12941"
+    }
+  ],
+  "name": "kinesis-data-publisher",
+  "id": "2G5ZEAQUJ",
+  "defaultInterpreterGroup": "flink",
+  "version": "0.9.0",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": false,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {},
+  "path": "/kinesis-data-publisher"
+}

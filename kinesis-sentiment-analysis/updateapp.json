@@ -1,0 +1,21 @@
+{
+	"ZeppelinApplicationConfigurationUpdate": {
+		"CustomArtifactsConfigurationUpdate": [
+			{
+				"ArtifactType": "DEPENDENCY_JAR",
+				"S3ContentLocation": {
+					"BucketARN": "arn:aws:s3:::flinkapps",
+					"FileKey": "aws-sdk-full.2.0.k4.jar"
+				}
+			},
+			{
+				"ArtifactType": "DEPENDENCY_JAR",
+				"MavenReference": { 
+					"GroupId": "software.amazon.kinesis",
+					"ArtifactId": "amazon-kinesis-sql-connector-flink",
+					"Version": "2.0.3"
+				  }
+			}
+		]
+	}
+}
