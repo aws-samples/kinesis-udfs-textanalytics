@@ -25,13 +25,6 @@
           <type>pom</type>
           <scope>import</scope>
         </dependency>
-        <dependency>
-          <groupId>com.amazonaws</groupId>
-          <artifactId>aws-java-sdk-bom</artifactId>
-          <version>1.11.928</version>
-          <type>pom</type>
-          <scope>import</scope>
-        </dependency>
       </dependencies>
     </dependencyManagement>
 
@@ -58,14 +51,6 @@
         <dependency>
           <groupId>software.amazon.awssdk</groupId>
           <artifactId>translate</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-comprehend</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-translate</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
