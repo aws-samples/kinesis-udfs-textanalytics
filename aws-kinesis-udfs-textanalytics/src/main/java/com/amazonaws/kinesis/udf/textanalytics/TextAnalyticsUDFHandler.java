@@ -20,34 +20,22 @@
 
 package com.amazonaws.kinesis.udf.textanalytics;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.retry.PredefinedBackoffStrategies;
-import com.amazonaws.retry.PredefinedRetryPolicies;
-import com.amazonaws.retry.RetryPolicy;
-import com.amazonaws.services.comprehend.AmazonComprehend;
-import com.amazonaws.services.comprehend.AmazonComprehendClientBuilder;
-import com.amazonaws.services.comprehend.model.BatchDetectDominantLanguageItemResult;
-import com.amazonaws.services.comprehend.model.BatchDetectDominantLanguageRequest;
-import com.amazonaws.services.comprehend.model.BatchDetectDominantLanguageResult;
-import com.amazonaws.services.comprehend.model.BatchDetectEntitiesItemResult;
-import com.amazonaws.services.comprehend.model.BatchDetectEntitiesRequest;
-import com.amazonaws.services.comprehend.model.BatchDetectEntitiesResult;
-import com.amazonaws.services.comprehend.model.BatchDetectSentimentItemResult;
-import com.amazonaws.services.comprehend.model.BatchDetectSentimentRequest;
-import com.amazonaws.services.comprehend.model.BatchDetectSentimentResult;
-import com.amazonaws.services.comprehend.model.BatchItemError;
-import com.amazonaws.services.comprehend.model.DetectPiiEntitiesRequest;
-import com.amazonaws.services.comprehend.model.DetectPiiEntitiesResult;
-import com.amazonaws.services.comprehend.model.Entity;
-import com.amazonaws.services.comprehend.model.PiiEntity;
-import com.amazonaws.services.comprehend.model.SentimentScore;
-import com.amazonaws.services.translate.AmazonTranslate;
-import com.amazonaws.services.translate.AmazonTranslateClientBuilder;
-import com.amazonaws.services.translate.model.TranslateTextRequest;
-import com.amazonaws.services.translate.model.TranslateTextResult;
+import software.amazon.awssdk.core.retry.backoff.EqualJitterBackoffStrategy;
+import software.amazon.awssdk.core.retry.RetryPolicy;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.services.translate.TranslateClient;
+import software.amazon.awssdk.services.translate.model.TranslateTextRequest;
+import software.amazon.awssdk.services.translate.model.TranslateTextResponse;
+import software.amazon.awssdk.services.translate.model.TranslateException;
+import software.amazon.awssdk.services.comprehend.ComprehendClient;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageItemResult;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageRequest;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageResponse;
+import software.amazon.awssdk.services.comprehend.model.BatchItemError;
+import software.amazon.awssdk.services.comprehend.model.DominantLanguage;
+
 import com.google.gson.Gson;
+import org.apache.log4j.varia.NullAppender;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -58,6 +46,7 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.StandardCharsets;
 import java.text.BreakIterator;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -67,53 +56,48 @@ public class TextAnalyticsUDFHandler
     public static int maxTextBytes = 5000;  //utf8 bytes
     public static int maxBatchSize = 25;
     
-    private AmazonComprehend comprehendClient;
-    private AmazonTranslate translateClient;
+    private TranslateClient translateClient;
+    private ComprehendClient comprehendClient;
 
-    private ClientConfiguration createClientConfiguration()
+    private ClientOverrideConfiguration createClientOverrideConfiguration()
     {
-        int retryBaseDelay = 1000;
-        int retryMaxBackoffTime = 600000;
+        int retryBaseDelay = 1;
+        int retryMaxBackoffTime = 600;
         int maxRetries = 100;
-        RetryPolicy retryPolicy = new RetryPolicy(PredefinedRetryPolicies.DEFAULT_RETRY_CONDITION,
-                                                  new PredefinedBackoffStrategies.ExponentialBackoffStrategy(retryBaseDelay, retryMaxBackoffTime),
-                                                  maxRetries,
-                                                  false);
-        ClientConfiguration clientConfiguration = new ClientConfiguration()
-                                                    .withRequestTimeout(5000)
-                                                    .withRetryPolicy(retryPolicy);
-        return clientConfiguration;
+        int timeout = 5;
+        RetryPolicy retryPolicy = RetryPolicy.defaultRetryPolicy().toBuilder()
+            .numRetries(maxRetries)
+            .backoffStrategy(EqualJitterBackoffStrategy.builder()
+                .baseDelay(Duration.ofSeconds(retryBaseDelay))
+                .maxBackoffTime(Duration.ofSeconds(retryMaxBackoffTime))
+                .build())
+            .build();
+        ClientOverrideConfiguration clientOverrideConfiguration = ClientOverrideConfiguration.builder()
+            .apiCallTimeout(Duration.ofSeconds(timeout))
+            .apiCallAttemptTimeout(Duration.ofSeconds(timeout))
+            .retryPolicy(retryPolicy)
+            .build();
+        return clientOverrideConfiguration;
     }
-    private AmazonComprehend getComprehendClient() 
+    private ComprehendClient getComprehendClient() 
     {
         // create client first time on demand
-        String region = (System.getenv("AWS_REGION") != null) ? System.getenv("AWS_REGION") : "us-east-1";
-        AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance();
         if (this.comprehendClient == null) {
-            System.out.println("Creating Comprehend client connection with ExponentialBackoffStrategy");
-            ClientConfiguration clientConfiguration = createClientConfiguration();
-            this.comprehendClient = AmazonComprehendClientBuilder.standard()
-                                             .withCredentials(awsCreds)
-                                             .withRegion(region)
-                                             .withClientConfiguration(clientConfiguration)
-                                             .build();
-            }
+            System.out.println("Creating Comprehend client connection");
+            this.comprehendClient = ComprehendClient.builder()
+                .overrideConfiguration(createClientOverrideConfiguration())
+                .build();
+        }
         return this.comprehendClient;
     }
-
-    private AmazonTranslate getTranslateClient() 
+    private TranslateClient getTranslateClient() 
     {
         // create client first time on demand
-        String region = (System.getenv("AWS_REGION") != null) ? System.getenv("AWS_REGION") : "us-east-1";
-        AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance();
         if (this.translateClient == null) {
-            System.out.println("Creating Translate client connection with ExponentialBackoffStrategy");
-            ClientConfiguration clientConfiguration = createClientConfiguration();
-            this.translateClient = AmazonTranslateClientBuilder.standard()
-                                             .withCredentials(awsCreds)
-                                             .withRegion(region)
-                                             .withClientConfiguration(clientConfiguration)
-                                             .build();
+            System.out.println("Creating Translate client connection");
+            this.translateClient = TranslateClient.builder()
+                .overrideConfiguration(createClientOverrideConfiguration())
+                .build();
         }
         return this.translateClient;
     }
@@ -166,22 +150,24 @@ public class TextAnalyticsUDFHandler
             }
             System.out.println("DEBUG: Call comprehend BatchDetectDominantLanguage API - Split Batch => Records: " + textArray.length);
             // Call batchDetectDominantLanguage API
-            BatchDetectDominantLanguageRequest batchDetectDominantLanguageRequest = new BatchDetectDominantLanguageRequest().withTextList(textArray);
-            BatchDetectDominantLanguageResult batchDetectDominantLanguageResult = getComprehendClient().batchDetectDominantLanguage(batchDetectDominantLanguageRequest);
+            BatchDetectDominantLanguageRequest batchDetectDominantLanguageRequest = BatchDetectDominantLanguageRequest.builder()
+                    .textList(textArray)
+                    .build();
+            BatchDetectDominantLanguageResponse batchDetectDominantLanguageResponse = getComprehendClient().batchDetectDominantLanguage(batchDetectDominantLanguageRequest);
             // Throw exception if errorList is populated
-            List<BatchItemError> batchItemError = batchDetectDominantLanguageResult.getErrorList();
+            List<BatchItemError> batchItemError = batchDetectDominantLanguageResponse.errorList();
             if (! batchItemError.isEmpty()) {
                 throw new RuntimeException("Error:  - ErrorList in batchDetectDominantLanguage result: " + batchItemError);
             }
-            List<BatchDetectDominantLanguageItemResult> batchDetectDominantLanguageItemResult = batchDetectDominantLanguageResult.getResultList(); 
+            List<BatchDetectDominantLanguageItemResult> batchDetectDominantLanguageItemResult = batchDetectDominantLanguageResponse.resultList(); 
             for (int i = 0; i < batchDetectDominantLanguageItemResult.size(); i++) {
                 if (fullResponse) {
                     // return JSON structure containing array of all detected languageCodes and scores
-                    result[rowNum] = this.toJSON(batchDetectDominantLanguageItemResult.get(i).getLanguages());
+                    result[rowNum] = this.toJSON(batchDetectDominantLanguageItemResult.get(i).languages());
                 }
                 else {
                     // return simple string containing the languageCode of the first (most confident) language
-                    result[rowNum] = batchDetectDominantLanguageItemResult.get(i).getLanguages().get(0).getLanguageCode();
+                    result[rowNum] = batchDetectDominantLanguageItemResult.get(i).languages().get(0).languageCode();
                 }
                 rowNum++;
             }
@@ -191,453 +177,6 @@ public class TextAnalyticsUDFHandler
         return resultjson;
     }
 
-    /**
-     * DETECT SENTIMENT
-     * ================
-     **/
-
-    /**
-    * Given a JSON array of input strings returns a JSON array of sentiment values representing the detected sentiment of each input string
-    * @param    inputjson    a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of sentiment string values
-    */
-    public String detect_sentiment(String inputjson, String languagejson) throws Exception
-    {
-        return detect_sentiment(inputjson, languagejson, false);
-    }   
-    
-    /**
-    * Given a JSON array of input strings returns a JSON array of nested objects representing detected sentiment and confidence scores for each input string
-    * @param    inputjson    a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of nested objects with detect_sentiment results for each input string
-    */
-    public String detect_sentiment_all(String inputjson, String languagejson) throws Exception
-    {
-        return detect_sentiment(inputjson, languagejson, true);
-    }   
-    private String detect_sentiment(String inputjson, String languagejson, boolean fullResponse) throws Exception
-    {
-        // convert input args to arrays
-        String[] input = fromJSON(inputjson);
-        String[] languageCodes = fromJSON(languagejson);
-        // batch input records
-        int rowCount = input.length;
-        String[] result = new String[rowCount];
-        int rowNum = 0;
-        boolean splitLongText = false;  // truncate, don't split long text fields.
-        for (Object[] batch : getBatches(input, languageCodes, this.maxBatchSize, this.maxTextBytes, splitLongText)) {
-            String[] textArray = (String[]) batch[0];
-            String singleRowOrMultiRow = (String) batch[1];
-            String languageCode = (String) batch[2];
-            if (! singleRowOrMultiRow.equals("MULTI_ROW_BATCH")) {
-                throw new RuntimeException("Error:  - Expected multirow batches only (truncate, not split): " + singleRowOrMultiRow);
-            }
-            System.out.println("DEBUG: Call comprehend BatchDetectSentiment API - Batch => Language:" + languageCode + " Records: " + textArray.length);
-
-            // Call batchDetectSentiment API
-            BatchDetectSentimentRequest batchDetectSentimentRequest = new BatchDetectSentimentRequest().withTextList(textArray).withLanguageCode(languageCode);
-            BatchDetectSentimentResult batchDetectSentimentResult = getComprehendClient().batchDetectSentiment(batchDetectSentimentRequest);
-            // Throw exception if errorList is populated
-            List<BatchItemError> batchItemError = batchDetectSentimentResult.getErrorList();
-            if (! batchItemError.isEmpty()) {
-                throw new RuntimeException("Error:  - ErrorList in batchDetectSentiment result: " + batchItemError);
-            }
-            List<BatchDetectSentimentItemResult> batchDetectSentimentItemResult = batchDetectSentimentResult.getResultList(); 
-            for (int i = 0; i < batchDetectSentimentItemResult.size(); i++) {
-                if (fullResponse) {
-                    // return JSON structure containing array of all sentiments and scores
-                    String sentiment = batchDetectSentimentItemResult.get(i).getSentiment();
-                    SentimentScore sentimentScore = batchDetectSentimentItemResult.get(i).getSentimentScore();
-                    result[rowNum] = "{\"sentiment\":" + toJSON(sentiment) + ",\"sentimentScore\":" + toJSON(sentimentScore) + "}";
-                }
-                else {
-                    // return simple string containing the main sentiment
-                    result[rowNum] = batchDetectSentimentItemResult.get(i).getSentiment();
-                }
-                rowNum++;
-            }                
-        }
-        // Convert output array to JSON string
-        String resultjson = toJSON(result);
-        return resultjson;
-    }
-
-    /**
-     * DETECT ENTITIES
-     * ================
-     **/
-
-    /**
-    * Given a JSON array of input strings returns a JSON array of nested arrays representing the detected entities (key/value pairs) in each input string
-    * @param    inputjson   a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of nested arrays each representing a list of detected entities for each input string.
-    */
-    public String detect_entities(String inputjson, String languagejson) throws Exception
-    {
-        return detect_entities(inputjson, languagejson, "[]", false);
-    } 
-    
-    /**
-    * Given a JSON array of input strings returns a JSON array of nested objects representing the detected entities and confidence scores for each input string
-    * @param    inputjson    a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of nested objects with detect_entities results for each input string
-    */
-    public String detect_entities_all(String inputjson, String languagejson) throws Exception
-    {
-        return detect_entities(inputjson, languagejson, "[]", true);
-    }  
-    
-    /**
-    * Given a JSON array of input strings with corresponding languages and entity types to redact, returns a JSON array redacted strings
-    * @param    inputjson   a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @param    redacttypesjson a JSON array of strings with comma-separated Entity Types to redact for each input string (or 'ALL' for all entity types)
-    * @return   a JSON array of strings with specified entity types redacted
-    */
-    public String redact_entities(String inputjson, String languagejson, String redacttypesjson) throws Exception
-    {
-        return detect_entities(inputjson, languagejson, redacttypesjson, false);
-    }
-    
-    private String detect_entities(String inputjson, String languagejson, String redacttypesjson, boolean fullResponse) throws Exception
-    {
-        // convert input args to arrays
-        String[] input = fromJSON(inputjson);
-        String[] languageCodes = fromJSON(languagejson);
-        String[] redactTypesArray = fromJSON(redacttypesjson);
-        // batch input records
-        int rowCount = input.length;
-        String[] result = new String[rowCount];
-        int rowNum = 0;
-        boolean splitLongText = true; // split long text fields, don't truncate.
-        for (Object[] batch : getBatches(input, languageCodes, this.maxBatchSize, this.maxTextBytes, splitLongText)) {
-            String[] textArray = (String[]) batch[0];
-            String singleRowOrMultiRow = (String) batch[1];
-            String languageCode = (String) batch[2];
-            System.out.println("DEBUG: Call comprehend BatchDetectEntities API - Batch => " + singleRowOrMultiRow + " Language:" + languageCode + " Records: " + textArray.length);
-            if (singleRowOrMultiRow.equals("MULTI_ROW_BATCH")) {
-                // batchArray represents multiple output rows, one element per output row
-                int r1 = (redactTypesArray.length > 0) ? rowNum : 0;
-                int r2 = (redactTypesArray.length > 0) ? rowNum + textArray.length : 0;
-                String[] redactTypesArraySubset = Arrays.copyOfRange(redactTypesArray, r1, r2);
-                String[] multiRowResults = MultiRowBatchDetectEntities(languageCode, textArray, redactTypesArraySubset, fullResponse);
-                for (int i = 0; i < multiRowResults.length; i++) {
-                    result[rowNum++] = multiRowResults[i];
-                }
-            }
-            else {
-                // batchArray represents single output row (text split)
-                String redactTypes = (redactTypesArray.length > 0) ? redactTypesArray[rowNum] : "";
-                String singleRowResults = TextSplitBatchDetectEntities(languageCode, textArray, redactTypes, fullResponse);
-                result[rowNum++] = singleRowResults;
-            }
-        }
-        // Convert output array to JSON string
-        String resultjson = toJSON(result);
-        return resultjson;
-    }
-
-    private String[] MultiRowBatchDetectEntities(String languageCode, String[] batch, String[] redactTypes, boolean fullResponse) throws Exception
-    {
-        String[] result = new String[batch.length];
-        // Call batchDetectEntities API
-        BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(batch).withLanguageCode(languageCode);
-        BatchDetectEntitiesResult batchDetectEntitiesResult = getComprehendClient().batchDetectEntities(batchDetectEntitiesRequest);
-        // Throw exception if errorList is populated
-        List<BatchItemError> batchItemError = batchDetectEntitiesResult.getErrorList();
-        if (! batchItemError.isEmpty()) {
-            throw new RuntimeException("Error:  - ErrorList in batchDetectEntities result: " + batchItemError);
-        }
-        List<BatchDetectEntitiesItemResult> batchDetectEntitiesItemResult = batchDetectEntitiesResult.getResultList(); 
-        if (batchDetectEntitiesItemResult.size() != batch.length) {
-            throw new RuntimeException("Error:  - batch size and result item count do not match");
-        }
-        for (int i = 0; i < batchDetectEntitiesItemResult.size(); i++) {
-            List<Entity> entities = batchDetectEntitiesItemResult.get(i).getEntities();
-            if (fullResponse) {
-                // return JSON structure containing all entity types, scores and offsets
-                result[i] = this.toJSON(entities);
-            }
-            else {
-                if (redactTypes.length == 0) {
-                    // no redaction - return JSON string containing the entity types and extracted values
-                    result[i] = getEntityTypesAndValues(entities, batch[i]);                      
-                }
-                else {
-                    // redaction - return input string with specified entity types redacted
-                    result[i] = redactEntityTypes(entities, batch[i], redactTypes[i]); 
-                }
-            }
-        }
-        return result;
-    }
-    private String TextSplitBatchDetectEntities(String languageCode, String[] input, String redactTypes, boolean fullResponse) throws Exception
-    {
-        String[] result = new String[input.length];
-        int[] offset = new int[input.length];
-        int rowNum = 0;
-        // TODO: If batch length is more than max batch size, split into smaller batches and iterate
-        for (Object[] batch : getBatches(input, this.maxBatchSize)) {
-            String[] textArray = (String[]) batch[0];
-            // Call batchDetectEntities API
-            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(textArray).withLanguageCode(languageCode);
-            BatchDetectEntitiesResult batchDetectEntitiesResult = getComprehendClient().batchDetectEntities(batchDetectEntitiesRequest);
-            // Throw exception if errorList is populated
-            List<BatchItemError> batchItemError = batchDetectEntitiesResult.getErrorList();
-            if (! batchItemError.isEmpty()) {
-                throw new RuntimeException("Error:  - ErrorList in batchDetectEntities result: " + batchItemError);
-            }
-            List<BatchDetectEntitiesItemResult> batchDetectEntitiesItemResult = batchDetectEntitiesResult.getResultList(); 
-            if (batchDetectEntitiesItemResult.size() != textArray.length) {
-                throw new RuntimeException("Error:  - array size " + textArray.length + " and result item count " + batchDetectEntitiesItemResult.size() + " do not match");
-            }
-            int cumOffset = 0;
-            for (int i = 0; i < batchDetectEntitiesItemResult.size(); i++) {
-                List<Entity> entities = batchDetectEntitiesItemResult.get(i).getEntities();
-                if (fullResponse) {
-                    // return JSON structure containing all entity types, scores and offsets
-                    result[rowNum] = this.toJSON(entities);
-                }
-                else {
-                    if (redactTypes.equals("")) {
-                        // no redaction - return JSON string containing the entity types and extracted values
-                        result[rowNum] = getEntityTypesAndValues(entities, textArray[i]);                      
-                    }
-                    else {
-                        // redaction - return input string with specified entity types redacted
-                        result[rowNum] = redactEntityTypes(entities, textArray[i], redactTypes); 
-                    }
-                }
-                offset[rowNum] = cumOffset;
-                cumOffset += textArray[i].length();
-                rowNum++;
-            }
-        }
-        // merge results to single output row
-        String mergedResult;
-        if (fullResponse) {
-            mergedResult = mergeEntitiesAll(result, offset);
-        }
-        else {
-            if (redactTypes.equals("")) {
-                mergedResult = mergeEntities(result);
-            }
-            else {
-                mergedResult = mergeText(result);
-            }
-        }
-        return mergedResult;
-    }   
-    private String getEntityTypesAndValues(List<Entity> entities, String text) throws Exception
-    {
-        List<String[]> typesAndValues = new ArrayList<String[]>();
-        for (Entity entity : entities) {
-            String type = entity.getType();
-            String value = text.substring(entity.getBeginOffset(), entity.getEndOffset());
-            typesAndValues.add(new String[]{type, value});
-        }
-        String resultjson = toJSON(typesAndValues);
-        return resultjson;
-    }
-    private String redactEntityTypes(List<Entity> entities, String text, String redactTypes) throws Exception
-    {
-        // redactTypes contains comma or space separated list of types, e.g. "NAME, ADDRESS"
-        List<String> redactTypeList = Arrays.asList(redactTypes.split("[\\s,]+")); 
-        String result = text;
-        int deltaLength = 0;
-        for (Entity entity : entities) {
-            String type = entity.getType();
-            if (redactTypes.contains(type) || redactTypes.contains("ALL")) {
-                // this is a PII type we need to redact
-                // Offset logic assumes piiEntity list is ordered by occurance in string
-                int start = entity.getBeginOffset() + deltaLength;
-                int end = entity.getEndOffset() + deltaLength;
-                int length1 = result.length(); 
-                result = new String(result.substring(0, start) + "[" + type + "]" + result.substring(end));
-                deltaLength = deltaLength + (result.length() - length1);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * DETECT / REDACT PII ENTITIES
-     * =============================
-     **/
-     
-    /**
-    * Given a JSON array of input strings returns a JSON array of nested arrays representing the detected PII entities (key/value pairs) in each input string
-    * @param    inputjson   a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of nested arrays each representing a list of detected PII entities for each input string.
-    */
-    public String detect_pii_entities(String inputjson, String languagejson) throws Exception
-    {
-        return detect_pii_entities(inputjson, languagejson, "[]", false);
-    }    
-
-    /**
-    * Given a JSON array of input strings returns a JSON array of nested objects representing the detected PII entities and confidence scores for each input string
-    * @param    inputjson    a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @return   a JSON array of nested objects with detect_pii_entities results for each input string
-    */
-    public String detect_pii_entities_all(String inputjson, String languagejson) throws Exception
-    {
-        return detect_pii_entities(inputjson, languagejson, "[]", true);
-    } 
-
-    /**
-    * Given a JSON array of input strings with corresponding languages and PII entity types to redact, returns a JSON array redacted strings
-    * @param    inputjson   a JSON array of input strings
-    * @param    languagejson a JSON array of language codes corresponding to each input string
-    * @param    redacttypesjson a JSON array of strings with comma-separated PII Entity Types to redact for each input string (or 'ALL' for all PII entity types)
-    * @return   a JSON array of strings with specified PII entity types redacted
-    */
-    public String redact_pii_entities(String inputjson, String languagejson, String redacttypesjson) throws Exception
-    {
-        return detect_pii_entities(inputjson, languagejson, redacttypesjson, false);
-    }
-    private String detect_pii_entities(String inputjson, String languagejson, String redacttypesjson, boolean fullResponse) throws Exception
-    {
-        // convert input args to arrays
-        String[] input = fromJSON(inputjson);
-        String[] languageCodes = fromJSON(languagejson);
-        String[] redactTypesArray = fromJSON(redacttypesjson);
-        // batch input records
-        int rowCount = input.length;
-        String[] result = new String[rowCount];
-        int rowNum = 0;
-        boolean splitLongText = true; // split long text fields, don't truncate.
-        for (Object[] batch : getBatches(input, languageCodes, this.maxBatchSize, this.maxTextBytes, splitLongText)) {
-            String[] textArray = (String[]) batch[0];
-            String singleRowOrMultiRow = (String) batch[1];
-            String languageCode = (String) batch[2];
-            System.out.println("DEBUG: Call comprehend DetectPiiEntities API - Batch => Language:" + languageCode + " Records: " + textArray.length);
-            if (singleRowOrMultiRow.equals("MULTI_ROW_BATCH")) {
-                // batchArray represents multiple output rows, one element per output row
-                int r1 = (redactTypesArray.length > 0) ? rowNum : 0;
-                int r2 = (redactTypesArray.length > 0) ? rowNum + textArray.length : 0;
-                String[] redactTypesArraySubset = Arrays.copyOfRange(redactTypesArray, r1, r2);
-                String[] multiRowResults = MultiRowBatchDetectPiiEntities(languageCode, textArray, redactTypesArraySubset, fullResponse);
-                for (int i = 0; i < multiRowResults.length; i++) {
-                    result[rowNum++] = multiRowResults[i];
-                }
-            }
-            else {
-                // batchArray represents single output row (long text split)
-                String redactTypes = (redactTypesArray.length > 0) ? redactTypesArray[rowNum] : "";
-                String singleRowResults = TextSplitBatchDetectPiiEntities(languageCode, textArray, redactTypes, fullResponse);
-                result[rowNum++] = singleRowResults;
-            }
-        }
-        // Convert output array to JSON string
-        String resultjson = toJSON(result);
-        return resultjson;
-    }
-    private String[] MultiRowBatchDetectPiiEntities(String languageCode, String[] batch, String[] redactTypes, boolean fullResponse) throws Exception
-    {
-        String[] result = new String[batch.length];
-        // Call detectPiiEntities API in loop  (no multidocument batch API available)
-        for (int i = 0; i < batch.length; i++) {
-            DetectPiiEntitiesRequest detectPiiEntitiesRequest = new DetectPiiEntitiesRequest().withText(batch[i]).withLanguageCode(languageCode);
-            DetectPiiEntitiesResult detectPiiEntitiesResult = getComprehendClient().detectPiiEntities(detectPiiEntitiesRequest);
-            List<PiiEntity> piiEntities = detectPiiEntitiesResult.getEntities(); 
-            if (fullResponse) {
-                // return JSON structure containing all entity types, scores and offsets
-                result[i] = this.toJSON(piiEntities);
-            }
-            else {
-                if (redactTypes.length == 0) {
-                    // no redaction - return JSON string containing the entity types and extracted values
-                    result[i] = getPiiEntityTypesAndValues(piiEntities, batch[i]);                      
-                }
-                else {
-                    // redaction - return input string with specified PII types redacted
-                    result[i] = redactPiiEntityTypes(piiEntities, batch[i], redactTypes[i]); 
-                }
-            }            
-        }
-        return result;
-    }
-    private String TextSplitBatchDetectPiiEntities(String languageCode, String[] batch, String redactTypes, boolean fullResponse) throws Exception
-    {
-        String[] result = new String[batch.length];
-        int[] offset = new int[batch.length];
-        // Call detectPiiEntities API in loop  (no multidocument batch API available)
-        int cumOffset = 0;
-        for (int i = 0; i < batch.length; i++) {
-            DetectPiiEntitiesRequest detectPiiEntitiesRequest = new DetectPiiEntitiesRequest().withText(batch[i]).withLanguageCode(languageCode);
-            DetectPiiEntitiesResult detectPiiEntitiesResult = getComprehendClient().detectPiiEntities(detectPiiEntitiesRequest);
-            List<PiiEntity> piiEntities = detectPiiEntitiesResult.getEntities(); 
-            if (fullResponse) {
-                // return JSON structure containing all entity types, scores and offsets
-                result[i] = this.toJSON(piiEntities);
-            }
-            else {
-                if (redactTypes.equals("")) {
-                    // no redaction - return JSON string containing the entity types and extracted values
-                    result[i] = getPiiEntityTypesAndValues(piiEntities, batch[i]);                      
-                }
-                else {
-                    // redaction - return input string with specified PII types redacted
-                    result[i] = redactPiiEntityTypes(piiEntities, batch[i], redactTypes); 
-                }
-            } 
-            offset[i] = cumOffset;
-            cumOffset += batch[i].length();
-        }
-        // merge results to single output row
-        String mergedResult;
-        if (fullResponse) {
-            mergedResult = mergeEntitiesAll(result, offset);
-        }
-        else {
-            if (redactTypes.equals("")) {
-                mergedResult = mergeEntities(result);
-            }
-            else {
-                mergedResult = mergeText(result);
-            }
-        }
-        return mergedResult;
-    }   
-    private String getPiiEntityTypesAndValues(List<PiiEntity> piiEntities, String text) throws Exception
-    {
-        List<String[]> typesAndValues = new ArrayList<String[]>();
-        for (PiiEntity piiEntity : piiEntities) {
-            String type = piiEntity.getType();
-            String value = text.substring(piiEntity.getBeginOffset(), piiEntity.getEndOffset());
-            typesAndValues.add(new String[]{type, value});
-        }
-        String resultjson = toJSON(typesAndValues);
-        return resultjson;
-    }
-    private String redactPiiEntityTypes(List<PiiEntity> piiEntities, String text, String redactTypes) throws Exception
-    {
-        // redactTypes contains comma or space separated list of types, e.g. "NAME, ADDRESS"
-        List<String> redactTypeList = Arrays.asList(redactTypes.split("[\\s,]+")); 
-        String result = text;
-        int deltaLength = 0;
-        for (PiiEntity piiEntity : piiEntities) {
-            String type = piiEntity.getType();
-            if (redactTypes.contains(type) || redactTypes.contains("ALL")) {
-                // this is a PII type we need to redact
-                // Offset logic assumes piiEntity list is ordered by occurance in string
-                int start = piiEntity.getBeginOffset() + deltaLength;
-                int end = piiEntity.getEndOffset() + deltaLength;
-                int length1 = result.length(); 
-                result = new String(result.substring(0, start) + "[" + type + "]" + result.substring(end));
-                deltaLength = deltaLength + (result.length() - length1);
-            }
-        }
-        return result;
-    }
-    
     /**
      * TRANSLATE TEXT
      */
@@ -695,16 +234,17 @@ public class TextAnalyticsUDFHandler
         String[] result = new String[batch.length];
         // Call translateText API in loop  (no multidocument batch API available)
         for (int i = 0; i < batch.length; i++) {
-            TranslateTextRequest translateTextRequest = new TranslateTextRequest()
-                                                                .withText(batch[i])
-                                                                .withSourceLanguageCode(sourceLanguageCodesSubset[i])
-                                                                .withTargetLanguageCode(targetLanguageCodesSubset[i]);
+            TranslateTextRequest translateTextRequest = TranslateTextRequest.builder()
+                .sourceLanguageCode(sourceLanguageCodesSubset[i])
+                .targetLanguageCode(targetLanguageCodesSubset[i])
+                .text(batch[i])
+                .build();
             if (! terminologyNamesSubset[i].equals("null")) {
-                translateTextRequest = translateTextRequest.withTerminologyNames(terminologyNamesSubset[i]);
+                translateTextRequest = translateTextRequest.toBuilder().terminologyNames(terminologyNamesSubset[i]).build();
             }
             try {
-                TranslateTextResult translateTextResult = getTranslateClient().translateText(translateTextRequest);
-                String translatedText = translateTextResult.getTranslatedText();  
+                TranslateTextResponse translateTextResponse = getTranslateClient().translateText(translateTextRequest);
+                String translatedText = translateTextResponse.translatedText();  
                 result[i] = translatedText;
             } 
             catch (Exception e) {
@@ -721,16 +261,17 @@ public class TextAnalyticsUDFHandler
         String[] result = new String[batch.length];
         // Call translateText API in loop  (no multidocument Translate API available)
         for (int i = 0; i < batch.length; i++) {
-            TranslateTextRequest translateTextRequest = new TranslateTextRequest()
-                                                                .withText(batch[i])
-                                                                .withSourceLanguageCode(sourceLanguageCode)
-                                                                .withTargetLanguageCode(targetLanguageCode);
+            TranslateTextRequest translateTextRequest = TranslateTextRequest.builder()
+                .sourceLanguageCode(sourceLanguageCode)
+                .targetLanguageCode(targetLanguageCode)
+                .text(batch[i])
+                .build();
             if (! terminologyName.equals("null")) {
-                translateTextRequest = translateTextRequest.withTerminologyNames(terminologyName);
+                translateTextRequest = translateTextRequest.toBuilder().terminologyNames(terminologyName).build();
             }
             try {
-                TranslateTextResult translateTextResult = getTranslateClient().translateText(translateTextRequest);
-                String translatedText = translateTextResult.getTranslatedText();  
+                TranslateTextResponse translateTextResponse = getTranslateClient().translateText(translateTextRequest);
+                String translatedText = translateTextResponse.translatedText();  
                 result[i] = translatedText;
             } 
             catch (Exception e) {
@@ -1002,27 +543,6 @@ public class TextAnalyticsUDFHandler
      * Testing
      **/
      
-    static void runSplitBySentenceTests(TextAnalyticsUDFHandler textAnalyticsUDFHandler) throws Exception
-    {
-        String result;
-        System.out.println("Test splitting text by sentence");
-        String longText = "My name is Mr. P. A. Jeremiah Smith Jr., and I live at 1234 Summer Dr., Anytown, USA. This sentence has 10.5 words, and some abbreviations, e.g. this one. Also: punctuation in quotes, like this, \"Way to go Joe!\", she said.";
-        System.out.println("Original text: " + longText);
-        result = textAnalyticsUDFHandler.redact_pii_entities(makeJsonArray(longText, 1), makeJsonArray("en", 1), makeJsonArray("ALL", 1));
-        System.out.println("Original - PII Redacted: " + String.join("", fromJSON(result))); 
-        result = textAnalyticsUDFHandler.redact_entities(makeJsonArray(longText, 1), makeJsonArray("en", 1), makeJsonArray("ALL", 1));
-        System.out.println("Original - Entities Redacted: " + String.join("", fromJSON(result))); 
-        String[] sentenceArray = splitStringBySentence(longText);
-        System.out.println("Split sentences: \n" + String.join("\n", sentenceArray)); 
-        int cnt = sentenceArray.length;
-        result = textAnalyticsUDFHandler.redact_pii_entities(toJSON(sentenceArray), makeJsonArray("en", cnt), makeJsonArray("ALL", cnt));
-        result = String.join("", fromJSON(result));
-        System.out.println("Text Split, PII Redacted and combined: " + result); 
-        result = textAnalyticsUDFHandler.redact_entities(toJSON(sentenceArray), makeJsonArray("en", cnt), makeJsonArray("ALL", cnt));
-        result = String.join("", fromJSON(result));
-        System.out.println("Text Split, Entities Redacted and combined: " + result); 
-    }
-    
     static void runStringLengthTests() throws Exception
     {
         String longText = "je déteste ça et je m'appelle Bob";
@@ -1075,14 +595,13 @@ public class TextAnalyticsUDFHandler
     // java -cp target/textanalyticsudfs-1.0.jar com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDFHandler
     public static void main(String[] args) throws Exception
     {
+        org.apache.log4j.BasicConfigurator.configure(new NullAppender());
+        
         TextAnalyticsUDFHandler textAnalyticsUDFHandler = new TextAnalyticsUDFHandler();
 
         System.out.println("\nSPLIT LONG TEXT BLOCKS");
         runSplitLongTextTest();
         
-        System.out.println("\nTEXT SPLITTING INTO SENTENCES");
-        runSplitBySentenceTests(textAnalyticsUDFHandler);
-
         System.out.println("\nUTF-8 STRING LENGTH TESTS");
         runStringLengthTests();
         
@@ -1101,35 +620,6 @@ public class TextAnalyticsUDFHandler
         System.out.println("detect_dominant_language_all - 2 rows:" + textJSON);
         System.out.println(textAnalyticsUDFHandler.detect_dominant_language_all(textJSON));
         
-        System.out.println("\nDETECT SENTIMENT");
-        textJSON = toJSON(new String[]{"I am happy", "She is sad", "ce n'est pas bon", "Je l'aime beaucoup"});
-        langJSON = toJSON(new String[]{"en", "en", "fr", "fr"});
-        // check logs for evidence of 2 batches with 2 items each, grouped by lang
-        System.out.println("detect_sentiment - 4 rows: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_sentiment(textJSON, langJSON));  
-        System.out.println("detect_sentiment_all - 4 rows: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_sentiment_all(textJSON, langJSON));
-        
-        System.out.println("\nDETECT / REDACT ENTITIES");
-        textJSON = toJSON(new String[]{"I am Bob, I live in Herndon", "Je suis Bob et j'habite à Herndon", "Soy Bob y vivo en Herndon"});
-        langJSON = toJSON(new String[]{"en", "fr", "es"});
-        System.out.println("detect_entities - 3 rows: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_entities(textJSON, langJSON));
-        System.out.println("detect_entities_all - 3 rows: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_entities_all(textJSON, langJSON));   
-        System.out.println("redact_entities - 3 rows, types ALL: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.redact_entities(textJSON, langJSON, makeJsonArray("ALL", 3))); 
-        
-        System.out.println("\nDETECT / REDACT PII ENTITIES");
-        textJSON = toJSON(new String[]{"I am Bob, I live in Herndon"});
-        langJSON = toJSON(new String[]{"en"});
-        System.out.println("detect_pii_entities - 1 row: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_pii_entities(textJSON, langJSON));
-        System.out.println("detect_pii_entities - 1 row: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.detect_pii_entities_all(textJSON, langJSON));   
-        System.out.println("redact_pii_entities - 1 row, types ALL: " + textJSON);
-        System.out.println(textAnalyticsUDFHandler.redact_pii_entities(textJSON, langJSON, makeJsonArray("ALL", 3))); 
-
         System.out.println("\nTRANSLATE TEXT");
         textJSON = toJSON(new String[]{"I am Bob, I live in Herndon", "I love to visit France"});
         String sourcelangJSON = toJSON(new String[]{"en", "en"});
@@ -1137,26 +627,6 @@ public class TextAnalyticsUDFHandler
         String terminologyNamesJSON = toJSON(new String[]{"null", "null"});
         System.out.println("translate_text - 1 row: " + textJSON);
         System.out.println(textAnalyticsUDFHandler.translate_text(textJSON, sourcelangJSON, targetlangJSON, terminologyNamesJSON));
-
-        System.out.println("\nLONG TEXT TESTS");
-        int textBytes = 60;
-        int batchSize = 3; 
-        textAnalyticsUDFHandler.maxTextBytes = textBytes;
-        textAnalyticsUDFHandler.maxBatchSize = batchSize;
-        System.out.println("Set max text length to " + textBytes + " bytes, and max batch size to " + batchSize + ", for testing");
-        textJSON = toJSON(new String[]{"I am Bob, I live in Herndon. I am Bob, I live in Herndon. I am Bob, I live in Herndon. I am Bob, I live in Herndon. I am Bob, I live in Herndon. I am Bob, I live in Herndon."});
-        langJSON = toJSON(new String[]{"en"});
-        System.out.println("detect_sentiment - 1 row: " + textJSON);
-        System.out.println("check logs for evidence of long text truncated by detect_sentiment.");
-        System.out.println(textAnalyticsUDFHandler.detect_sentiment(textJSON, langJSON));
-        System.out.println("detect_entities / redact_entities - 1 row: " + textJSON);
-        System.out.println("check logs for evidence of long text split into 2 batches w/ max 3 rows per batch.");
-        System.out.println(textAnalyticsUDFHandler.detect_entities(textJSON, langJSON));        
-        System.out.println(textAnalyticsUDFHandler.redact_entities(textJSON, langJSON, makeJsonArray("ALL", 1)));        
-        System.out.println("detect_pii_entities / redact_pii_entities - 1 row: " + textJSON);
-        System.out.println("check logs for evidence of long text split into 3 rows.");
-        System.out.println(textAnalyticsUDFHandler.detect_pii_entities(textJSON, langJSON));        
-        System.out.println(textAnalyticsUDFHandler.redact_pii_entities(textJSON, langJSON, makeJsonArray("ALL", 1)));        
         
     }
 }
