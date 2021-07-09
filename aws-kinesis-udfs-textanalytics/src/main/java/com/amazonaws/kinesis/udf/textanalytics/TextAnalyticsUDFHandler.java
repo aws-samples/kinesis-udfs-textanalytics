@@ -31,8 +31,13 @@ import software.amazon.awssdk.services.comprehend.ComprehendClient;
 import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageItemResult;
 import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageRequest;
 import software.amazon.awssdk.services.comprehend.model.BatchDetectDominantLanguageResponse;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentItemResult;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentRequest;
+import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentResponse;
+import software.amazon.awssdk.services.comprehend.model.SentimentScore;
 import software.amazon.awssdk.services.comprehend.model.BatchItemError;
 import software.amazon.awssdk.services.comprehend.model.DominantLanguage;
+
 
 import com.google.gson.Gson;
 import org.apache.log4j.varia.NullAppender;
@@ -176,6 +181,83 @@ public class TextAnalyticsUDFHandler
         String resultjson = toJSON(result);
         return resultjson;
     }
+
+    /**
+     * DETECT SENTIMENT
+     * ================
+     **/
+
+    /**
+    * Given a JSON array of input strings returns a JSON array of sentiment values representing the detected sentiment of each input string
+    * @param    inputjson    a JSON array of input strings
+    * @param    languagejson a JSON array of language codes corresponding to each input string
+    * @return   a JSON array of sentiment string values
+    */
+    public String detect_sentiment(String inputjson, String languagejson) throws Exception
+    {
+        return detect_sentiment(inputjson, languagejson, false);
+    }   
+    
+    /**
+    * Given a JSON array of input strings returns a JSON array of nested objects representing detected sentiment and confidence scores for each input string
+    * @param    inputjson    a JSON array of input strings
+    * @param    languagejson a JSON array of language codes corresponding to each input string
+    * @return   a JSON array of nested objects with detect_sentiment results for each input string
+    */
+    public String detect_sentiment_all(String inputjson, String languagejson) throws Exception
+    {
+        return detect_sentiment(inputjson, languagejson, true);
+    }   
+    private String detect_sentiment(String inputjson, String languagejson, boolean fullResponse) throws Exception
+    {
+        // convert input args to arrays
+        String[] input = fromJSON(inputjson);
+        String[] languageCodes = fromJSON(languagejson);
+        // batch input records
+        int rowCount = input.length;
+        String[] result = new String[rowCount];
+        int rowNum = 0;
+        boolean splitLongText = false;  // truncate, don't split long text fields.
+        for (Object[] batch : getBatches(input, languageCodes, this.maxBatchSize, this.maxTextBytes, splitLongText)) {
+            String[] textArray = (String[]) batch[0];
+            String singleRowOrMultiRow = (String) batch[1];
+            String languageCode = (String) batch[2];
+            if (! singleRowOrMultiRow.equals("MULTI_ROW_BATCH")) {
+                throw new RuntimeException("Error:  - Expected multirow batches only (truncate, not split): " + singleRowOrMultiRow);
+            }
+            System.out.println("DEBUG: Call comprehend BatchDetectSentiment API - Batch => Language:" + languageCode + " Records: " + textArray.length);
+
+            // Call batchDetectSentiment API
+            BatchDetectSentimentRequest batchDetectSentimentRequest = BatchDetectSentimentRequest.builder()
+                .textList(textArray)
+                .languageCode(languageCode)
+                .build();
+            BatchDetectSentimentResponse batchDetectSentimentResponse = getComprehendClient().batchDetectSentiment(batchDetectSentimentRequest);
+            // Throw exception if errorList is populated
+            List<BatchItemError> batchItemError = batchDetectSentimentResponse.errorList();
+            if (! batchItemError.isEmpty()) {
+                throw new RuntimeException("Error:  - ErrorList in batchDetectSentiment result: " + batchItemError);
+            }
+            List<BatchDetectSentimentItemResult> batchDetectSentimentItemResult = batchDetectSentimentResponse.resultList(); 
+            for (int i = 0; i < batchDetectSentimentItemResult.size(); i++) {
+                if (fullResponse) {
+                    // return JSON structure containing array of all sentiments and scores
+                    String sentiment = batchDetectSentimentItemResult.get(i).sentiment().toString();
+                    SentimentScore sentimentScore = batchDetectSentimentItemResult.get(i).sentimentScore();
+                    result[rowNum] = "{\"sentiment\":" + toJSON(sentiment) + ",\"sentimentScore\":" + toJSON(sentimentScore) + "}";
+                }
+                else {
+                    // return simple string containing the main sentiment
+                    result[rowNum] = batchDetectSentimentItemResult.get(i).sentiment().toString();
+                }
+                rowNum++;
+            }                
+        }
+        // Convert output array to JSON string
+        String resultjson = toJSON(result);
+        return resultjson;
+    }
+
 
     /**
      * TRANSLATE TEXT
@@ -619,6 +701,15 @@ public class TextAnalyticsUDFHandler
         System.out.println(textAnalyticsUDFHandler.detect_dominant_language(textJSON));
         System.out.println("detect_dominant_language_all - 2 rows:" + textJSON);
         System.out.println(textAnalyticsUDFHandler.detect_dominant_language_all(textJSON));
+
+        System.out.println("\nDETECT SENTIMENT");
+        textJSON = toJSON(new String[]{"I am happy", "She is sad", "ce n'est pas bon", "Je l'aime beaucoup"});
+        langJSON = toJSON(new String[]{"en", "en", "fr", "fr"});
+        // check logs for evidence of 2 batches with 2 items each, grouped by lang
+        System.out.println("detect_sentiment - 4 rows: " + textJSON);
+        System.out.println(textAnalyticsUDFHandler.detect_sentiment(textJSON, langJSON));  
+        System.out.println("detect_sentiment_all - 4 rows: " + textJSON);
+        System.out.println(textAnalyticsUDFHandler.detect_sentiment_all(textJSON, langJSON));
         
         System.out.println("\nTRANSLATE TEXT");
         textJSON = toJSON(new String[]{"I am Bob, I live in Herndon", "I love to visit France"});
