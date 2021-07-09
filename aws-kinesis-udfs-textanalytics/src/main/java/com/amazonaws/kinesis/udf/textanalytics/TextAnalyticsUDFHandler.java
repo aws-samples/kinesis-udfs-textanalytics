@@ -37,11 +37,13 @@ import software.amazon.awssdk.services.comprehend.model.BatchDetectEntitiesRespo
 import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentItemResult;
 import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentRequest;
 import software.amazon.awssdk.services.comprehend.model.BatchDetectSentimentResponse;
-import software.amazon.awssdk.services.comprehend.model.Entity;
-import software.amazon.awssdk.services.comprehend.model.SentimentScore;
 import software.amazon.awssdk.services.comprehend.model.BatchItemError;
+import software.amazon.awssdk.services.comprehend.model.DetectPiiEntitiesRequest;
+import software.amazon.awssdk.services.comprehend.model.DetectPiiEntitiesResponse;
 import software.amazon.awssdk.services.comprehend.model.DominantLanguage;
-
+import software.amazon.awssdk.services.comprehend.model.Entity;
+import software.amazon.awssdk.services.comprehend.model.PiiEntity;
+import software.amazon.awssdk.services.comprehend.model.SentimentScore;
 
 import com.google.gson.Gson;
 import org.apache.log4j.varia.NullAppender;
@@ -468,6 +470,186 @@ public class TextAnalyticsUDFHandler
         return result;
     }
 
+    /**
+     * DETECT / REDACT PII ENTITIES
+     * =============================
+     **/
+     
+    /**
+    * Given a JSON array of input strings returns a JSON array of nested arrays representing the detected PII entities (key/value pairs) in each input string
+    * @param    inputjson   a JSON array of input strings
+    * @param    languagejson a JSON array of language codes corresponding to each input string
+    * @return   a JSON array of nested arrays each representing a list of detected PII entities for each input string.
+    */
+    public String detect_pii_entities(String inputjson, String languagejson) throws Exception
+    {
+        return detect_pii_entities(inputjson, languagejson, "[]", false);
+    }    
+
+    /**
+    * Given a JSON array of input strings returns a JSON array of nested objects representing the detected PII entities and confidence scores for each input string
+    * @param    inputjson    a JSON array of input strings
+    * @param    languagejson a JSON array of language codes corresponding to each input string
+    * @return   a JSON array of nested objects with detect_pii_entities results for each input string
+    */
+    public String detect_pii_entities_all(String inputjson, String languagejson) throws Exception
+    {
+        return detect_pii_entities(inputjson, languagejson, "[]", true);
+    } 
+
+    /**
+    * Given a JSON array of input strings with corresponding languages and PII entity types to redact, returns a JSON array redacted strings
+    * @param    inputjson   a JSON array of input strings
+    * @param    languagejson a JSON array of language codes corresponding to each input string
+    * @param    redacttypesjson a JSON array of strings with comma-separated PII Entity Types to redact for each input string (or 'ALL' for all PII entity types)
+    * @return   a JSON array of strings with specified PII entity types redacted
+    */
+    public String redact_pii_entities(String inputjson, String languagejson, String redacttypesjson) throws Exception
+    {
+        return detect_pii_entities(inputjson, languagejson, redacttypesjson, false);
+    }
+    private String detect_pii_entities(String inputjson, String languagejson, String redacttypesjson, boolean fullResponse) throws Exception
+    {
+        // convert input args to arrays
+        String[] input = fromJSON(inputjson);
+        String[] languageCodes = fromJSON(languagejson);
+        String[] redactTypesArray = fromJSON(redacttypesjson);
+        // batch input records
+        int rowCount = input.length;
+        String[] result = new String[rowCount];
+        int rowNum = 0;
+        boolean splitLongText = true; // split long text fields, don't truncate.
+        for (Object[] batch : getBatches(input, languageCodes, this.maxBatchSize, this.maxTextBytes, splitLongText)) {
+            String[] textArray = (String[]) batch[0];
+            String singleRowOrMultiRow = (String) batch[1];
+            String languageCode = (String) batch[2];
+            System.out.println("DEBUG: Call comprehend DetectPiiEntities API - Batch => Language:" + languageCode + " Records: " + textArray.length);
+            if (singleRowOrMultiRow.equals("MULTI_ROW_BATCH")) {
+                // batchArray represents multiple output rows, one element per output row
+                int r1 = (redactTypesArray.length > 0) ? rowNum : 0;
+                int r2 = (redactTypesArray.length > 0) ? rowNum + textArray.length : 0;
+                String[] redactTypesArraySubset = Arrays.copyOfRange(redactTypesArray, r1, r2);
+                String[] multiRowResults = MultiRowBatchDetectPiiEntities(languageCode, textArray, redactTypesArraySubset, fullResponse);
+                for (int i = 0; i < multiRowResults.length; i++) {
+                    result[rowNum++] = multiRowResults[i];
+                }
+            }
+            else {
+                // batchArray represents single output row (long text split)
+                String redactTypes = (redactTypesArray.length > 0) ? redactTypesArray[rowNum] : "";
+                String singleRowResults = TextSplitBatchDetectPiiEntities(languageCode, textArray, redactTypes, fullResponse);
+                result[rowNum++] = singleRowResults;
+            }
+        }
+        // Convert output array to JSON string
+        String resultjson = toJSON(result);
+        return resultjson;
+    }
+    private String[] MultiRowBatchDetectPiiEntities(String languageCode, String[] batch, String[] redactTypes, boolean fullResponse) throws Exception
+    {
+        String[] result = new String[batch.length];
+        // Call detectPiiEntities API in loop  (no multidocument batch API available)
+        for (int i = 0; i < batch.length; i++) {
+            DetectPiiEntitiesRequest detectPiiEntitiesRequest = DetectPiiEntitiesRequest.builder()
+                .text(batch[i])
+                .languageCode(languageCode)
+                .build();
+            DetectPiiEntitiesResponse detectPiiEntitiesResponse = getComprehendClient().detectPiiEntities(detectPiiEntitiesRequest);
+            List<PiiEntity> piiEntities = detectPiiEntitiesResponse.entities(); 
+            if (fullResponse) {
+                // return JSON structure containing all entity types, scores and offsets
+                result[i] = this.toJSON(piiEntities);
+            }
+            else {
+                if (redactTypes.length == 0) {
+                    // no redaction - return JSON string containing the entity types and extracted values
+                    result[i] = getPiiEntityTypesAndValues(piiEntities, batch[i]);                      
+                }
+                else {
+                    // redaction - return input string with specified PII types redacted
+                    result[i] = redactPiiEntityTypes(piiEntities, batch[i], redactTypes[i]); 
+                }
+            }            
+        }
+        return result;
+    }
+    private String TextSplitBatchDetectPiiEntities(String languageCode, String[] batch, String redactTypes, boolean fullResponse) throws Exception
+    {
+        String[] result = new String[batch.length];
+        int[] offset = new int[batch.length];
+        // Call detectPiiEntities API in loop  (no multidocument batch API available)
+        int cumOffset = 0;
+        for (int i = 0; i < batch.length; i++) {
+            DetectPiiEntitiesRequest detectPiiEntitiesRequest = DetectPiiEntitiesRequest.builder()
+                .text(batch[i])
+                .languageCode(languageCode)
+                .build();
+            DetectPiiEntitiesResponse detectPiiEntitiesResponse = getComprehendClient().detectPiiEntities(detectPiiEntitiesRequest);
+            List<PiiEntity> piiEntities = detectPiiEntitiesResponse.entities();
+            if (fullResponse) {
+                // return JSON structure containing all entity types, scores and offsets
+                result[i] = this.toJSON(piiEntities);
+            }
+            else {
+                if (redactTypes.equals("")) {
+                    // no redaction - return JSON string containing the entity types and extracted values
+                    result[i] = getPiiEntityTypesAndValues(piiEntities, batch[i]);                      
+                }
+                else {
+                    // redaction - return input string with specified PII types redacted
+                    result[i] = redactPiiEntityTypes(piiEntities, batch[i], redactTypes); 
+                }
+            } 
+            offset[i] = cumOffset;
+            cumOffset += batch[i].length();
+        }
+        // merge results to single output row
+        String mergedResult;
+        if (fullResponse) {
+            mergedResult = mergeEntitiesAll(result, offset);
+        }
+        else {
+            if (redactTypes.equals("")) {
+                mergedResult = mergeEntities(result);
+            }
+            else {
+                mergedResult = mergeText(result);
+            }
+        }
+        return mergedResult;
+    }   
+    private String getPiiEntityTypesAndValues(List<PiiEntity> piiEntities, String text) throws Exception
+    {
+        List<String[]> typesAndValues = new ArrayList<String[]>();
+        for (PiiEntity piiEntity : piiEntities) {
+            String type = piiEntity.type().toString();
+            String value = text.substring(piiEntity.beginOffset(), piiEntity.endOffset());
+            typesAndValues.add(new String[]{type, value});
+        }
+        String resultjson = toJSON(typesAndValues);
+        return resultjson;
+    }
+    private String redactPiiEntityTypes(List<PiiEntity> piiEntities, String text, String redactTypes) throws Exception
+    {
+        // redactTypes contains comma or space separated list of types, e.g. "NAME, ADDRESS"
+        List<String> redactTypeList = Arrays.asList(redactTypes.split("[\\s,]+")); 
+        String result = text;
+        int deltaLength = 0;
+        for (PiiEntity piiEntity : piiEntities) {
+            String type = piiEntity.type().toString();
+            if (redactTypes.contains(type) || redactTypes.contains("ALL")) {
+                // this is a PII type we need to redact
+                // Offset logic assumes piiEntity list is ordered by occurance in string
+                int start = piiEntity.beginOffset() + deltaLength;
+                int end = piiEntity.endOffset() + deltaLength;
+                int length1 = result.length(); 
+                result = new String(result.substring(0, start) + "[" + type + "]" + result.substring(end));
+                deltaLength = deltaLength + (result.length() - length1);
+            }
+        }
+        return result;
+    }
+
 
     /**
      * TRANSLATE TEXT
@@ -834,6 +1016,27 @@ public class TextAnalyticsUDFHandler
     /**
      * Testing
      **/
+
+    static void runSplitBySentenceTests(TextAnalyticsUDFHandler textAnalyticsUDFHandler) throws Exception
+    {
+        String result;
+        System.out.println("Test splitting text by sentence");
+        String longText = "My name is Mr. P. A. Jeremiah Smith Jr., and I live at 1234 Summer Dr., Anytown, USA. This sentence has 10.5 words, and some abbreviations, e.g. this one. Also: punctuation in quotes, like this, \"Way to go Joe!\", she said.";
+        System.out.println("Original text: " + longText);
+        result = textAnalyticsUDFHandler.redact_pii_entities(makeJsonArray(longText, 1), makeJsonArray("en", 1), makeJsonArray("ALL", 1));
+        System.out.println("Original - PII Redacted: " + String.join("", fromJSON(result))); 
+        result = textAnalyticsUDFHandler.redact_entities(makeJsonArray(longText, 1), makeJsonArray("en", 1), makeJsonArray("ALL", 1));
+        System.out.println("Original - Entities Redacted: " + String.join("", fromJSON(result))); 
+        String[] sentenceArray = splitStringBySentence(longText);
+        System.out.println("Split sentences: \n" + String.join("\n", sentenceArray)); 
+        int cnt = sentenceArray.length;
+        result = textAnalyticsUDFHandler.redact_pii_entities(toJSON(sentenceArray), makeJsonArray("en", cnt), makeJsonArray("ALL", cnt));
+        result = String.join("", fromJSON(result));
+        System.out.println("Text Split, PII Redacted and combined: " + result); 
+        result = textAnalyticsUDFHandler.redact_entities(toJSON(sentenceArray), makeJsonArray("en", cnt), makeJsonArray("ALL", cnt));
+        result = String.join("", fromJSON(result));
+        System.out.println("Text Split, Entities Redacted and combined: " + result); 
+    }
      
     static void runStringLengthTests() throws Exception
     {
@@ -851,8 +1054,6 @@ public class TextAnalyticsUDFHandler
         String[] splits = splitLongText(longText, maxTextBytes);
         System.out.println("Split of long text: \n" + String.join("\n", splits));
     }
-    
-    
     
     static void runMergeEntitiesTests() throws Exception
     {
@@ -893,7 +1094,10 @@ public class TextAnalyticsUDFHandler
 
         System.out.println("\nSPLIT LONG TEXT BLOCKS");
         runSplitLongTextTest();
-        
+
+        System.out.println("\nTEXT SPLITTING INTO SENTENCES");
+        runSplitBySentenceTests(textAnalyticsUDFHandler);
+
         System.out.println("\nUTF-8 STRING LENGTH TESTS");
         runStringLengthTests();
         
@@ -930,7 +1134,17 @@ public class TextAnalyticsUDFHandler
         System.out.println(textAnalyticsUDFHandler.detect_entities_all(textJSON, langJSON));   
         System.out.println("redact_entities - 3 rows, types ALL: " + textJSON);
         System.out.println(textAnalyticsUDFHandler.redact_entities(textJSON, langJSON, makeJsonArray("ALL", 3))); 
-        
+
+        System.out.println("\nDETECT / REDACT PII ENTITIES");
+        textJSON = toJSON(new String[]{"I am Bob, I live in Herndon"});
+        langJSON = toJSON(new String[]{"en"});
+        System.out.println("detect_pii_entities - 1 row: " + textJSON);
+        System.out.println(textAnalyticsUDFHandler.detect_pii_entities(textJSON, langJSON));
+        System.out.println("detect_pii_entities - 1 row: " + textJSON);
+        System.out.println(textAnalyticsUDFHandler.detect_pii_entities_all(textJSON, langJSON));   
+        System.out.println("redact_pii_entities - 1 row, types ALL: " + textJSON);
+        System.out.println(textAnalyticsUDFHandler.redact_pii_entities(textJSON, langJSON, makeJsonArray("ALL", 3))); 
+
         System.out.println("\nTRANSLATE TEXT");
         textJSON = toJSON(new String[]{"I am Bob, I live in Herndon", "I love to visit France"});
         String sourcelangJSON = toJSON(new String[]{"en", "en"});
