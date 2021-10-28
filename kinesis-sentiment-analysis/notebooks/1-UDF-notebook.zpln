@@ -1,0 +1,887 @@
+﻿{
+  "paragraphs": [
+    {
+      "title": "#1 : Setup configuration for AWS SDK",
+      "text": "%flink\n\n/*\n    =======================================\n    == Create SDK config in scala itself ==\n    =======================================\n*/\n\nimport software.amazon.awssdk.core.client.config.ClientOverrideConfiguration\nimport software.amazon.awssdk.core.retry.backoff.EqualJitterBackoffStrategy\nimport software.amazon.awssdk.core.retry.RetryPolicy\nimport java.time.Duration;\n\nimport software.amazon.awssdk.services.comprehend.ComprehendClient;\nimport software.amazon.awssdk.services.translate.TranslateClient;\n\ntrait TraitForAWSSDKClientConfiguration   {\n            \n    def createClientOverrideConfiguration() : ClientOverrideConfiguration = {\n        val retryBaseDelay: Int = 1\n        val retryMaxBackoffTime: Int = 600\n        val maxRetries: Int = 100\n        val timeout: Int = 10\n        val retryPolicy: RetryPolicy = RetryPolicy\n                                            .defaultRetryPolicy()\n                                            .toBuilder()\n                                            .numRetries(maxRetries)\n                                            .backoffStrategy(\n                                                EqualJitterBackoffStrategy\n                                                    .builder()\n                                                    .baseDelay(Duration.ofSeconds(retryBaseDelay))\n                                                    .maxBackoffTime(Duration.ofSeconds(retryMaxBackoffTime))\n                                                    .build()\n                                            )\n                                            .build()\n                                                \n        val clientOverrideConfiguration: ClientOverrideConfiguration = ClientOverrideConfiguration\n                                                                            .builder()\n                                                                            .apiCallTimeout(Duration.ofSeconds(timeout))\n                                                                            .apiCallAttemptTimeout(Duration.ofSeconds(timeout))\n                                                                            .retryPolicy(retryPolicy)\n                                                                            .build()\n        clientOverrideConfiguration\n    }\n}",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T09:07:01+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/scala",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration\nimport software.amazon.awssdk.core.retry.backoff.EqualJitterBackoffStrategy\nimport software.amazon.awssdk.core.retry.RetryPolicy\nimport java.time.Duration\nimport software.amazon.awssdk.services.comprehend.ComprehendClient\nimport software.amazon.awssdk.services.translate.TranslateClient\ndefined trait TraitForAWSSDKClientConfiguration\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635323902208_1785270461",
+      "id": "paragraph_1634157793813_1911179420",
+      "dateCreated": "2021-10-27T08:38:22+0000",
+      "dateStarted": "2021-10-27T09:07:01+0000",
+      "dateFinished": "2021-10-27T09:07:06+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:453"
+    },
+    {
+      "title": "#2 : Setup User Defined Function to interact with JAR",
+      "text": "%flink(parallelism=1)\n\n/*\n    =============\n    == The UDF ==\n    =============\n*/\n        \nimport org.apache.flink.streaming.api.scala._\nimport org.apache.flink.table.functions.FunctionContext\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\n\n// pull in awssdk\nimport software.amazon.awssdk.services.comprehend.ComprehendClient;\nimport software.amazon.awssdk.services.translate.TranslateClient;\nimport software.amazon.awssdk.regions.Region;\nimport com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDFHandler\nimport java.io._\nimport java.util.Map\n\nclass TextAnalyticsUDF extends ScalarFunction with TraitForAWSSDKClientConfiguration {\n          \n    private var comprehend : ComprehendClient = null\n    private var translate : TranslateClient = null\n    private var handler : TextAnalyticsUDFHandler = null;\n    private var region : Region = null;\n                \n    override def open(context: FunctionContext): Unit = {\n        region = Region.US_EAST_1\n        comprehend = ComprehendClient\n                            .builder()\n                            .overrideConfiguration(createClientOverrideConfiguration())\n                            .region(region)\n                            .build()\n                            \n        translate = TranslateClient\n                                .builder()\n                                .overrideConfiguration(createClientOverrideConfiguration())\n                                .region(region)\n                                .build()\n        \n        //pass AWS SDK clients to JAR via constructor overloading                         \n        handler = new TextAnalyticsUDFHandler(comprehend, translate);\n    }\n          \n    override def close(): Unit = {\n        if(comprehend != null) {\n            comprehend.close()\n            comprehend = null\n        }\n        \n        if(translate != null) {\n            translate.close()\n            translate = null\n        }\n    }\n    \n    def eval(todo: String, input: String):  String  = {\n        var retVal: String = null;\n        retVal = todo match {\n         case \"detect_dominant_language\"     => handler.detect_dominant_language(input)\n         case \"detect_dominant_language_all\" => handler.detect_dominant_language_all(input)\n         case _                              => \"no match found\"                    \n        }\n        retVal\n    }\n\n    def eval(todo: String, input: String, lang: String):  Array[String]  = {\n        var retVal: Array[String] = null;\n        retVal = todo match {\n            case \"detect_sentiment\"        => handler.detect_sentiment(input, lang)\n            case \"detect_sentiment_all\"    => handler.detect_sentiment_all(input, lang)\n            case \"detect_entities\"         => handler.detect_entities(input, lang)\n            case \"detect_entities_all\"     => handler.detect_entities_all(input, lang)\n            case \"detect_pii_entities\"     => handler.detect_pii_entities(input, lang)\n            case \"detect_pii_entities_all\" => handler.detect_pii_entities_all(input, lang)\n            case \"redact_entities\"         => handler.redact_entities(input, lang, \"ALL\")\n            case \"redact_pii_entities\"     => handler.redact_pii_entities(input, lang, \"ALL\")\n            case _                         => Array(\"no match found\")                       \n        }\n        retVal\n    }\n    \n   \n    def eval(todo: String, input: String, targetLang: String, terminologyNames: String):  String  = {\n        var retVal: String = null;\n        retVal = todo match {\n         case \"translate_text\" => handler.translate_text(input, \"auto\", targetLang, terminologyNames)\n         case _                => \"no match found\"                    \n        }\n        retVal\n    }\n    \n}\n    \nbtenv.registerFunction(\"text_analytics_udf\", new TextAnalyticsUDF())",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T09:07:08+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/scala",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "import org.apache.flink.streaming.api.scala._\nimport org.apache.flink.table.functions.FunctionContext\nimport org.apache.flink.api.common.serialization.SimpleStringSchema\nimport software.amazon.awssdk.services.comprehend.ComprehendClient\nimport software.amazon.awssdk.services.translate.TranslateClient\nimport software.amazon.awssdk.regions.Region\nimport com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDFHandler\nimport java.io._\nimport java.util.Map\ndefined class TextAnalyticsUDF\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635323902213_826638777",
+      "id": "paragraph_1634157844084_326987937",
+      "dateCreated": "2021-10-27T08:38:22+0000",
+      "dateStarted": "2021-10-27T09:07:08+0000",
+      "dateFinished": "2021-10-27T09:07:16+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:454"
+    },
+    {
+      "title": "#3 : Enable checkpointing for S3 sink",
+      "text": "%flink\n// start a checkpoint every 1 minute\nsenv.enableCheckpointing(60000)",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T08:42:02+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/scala",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "\u001b[1m\u001b[34mres20\u001b[0m: \u001b[1m\u001b[32morg.apache.flink.streaming.api.scala.StreamExecutionEnvironment\u001b[0m = org.apache.flink.streaming.api.scala.StreamExecutionEnvironment@35957c23\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635323902214_17798534",
+      "id": "paragraph_1635309545310_1400890650",
+      "dateCreated": "2021-10-27T08:38:22+0000",
+      "dateStarted": "2021-10-27T08:42:02+0000",
+      "dateFinished": "2021-10-27T08:42:05+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:455"
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_dominant_language', message) as detected_language\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:13:22+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/caffe04b0fc1768a9517b4a903f7e4d9",
+              "$$hashKey": "object:7426"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347518642_1607135690",
+      "id": "paragraph_1635347518642_1607135690",
+      "dateCreated": "2021-10-27T15:11:58+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:6487",
+      "dateFinished": "2021-10-27T15:12:53+0000",
+      "dateStarted": "2021-10-27T15:12:41+0000",
+      "title": "#4 : UDF example for language detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tdetected_language\nI am very happy\ten\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_dominant_language_all', message) as detected_language\nFROM \n\t(\n\tVALUES\n        ('I am very happy et joyeux')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:16:41+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/348e44f586ad885a4f18b1e701b2e185",
+              "$$hashKey": "object:8409"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635324122884_1027013099",
+      "id": "paragraph_1635324122884_1027013099",
+      "dateCreated": "2021-10-27T08:42:02+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:456",
+      "dateFinished": "2021-10-27T15:15:24+0000",
+      "dateStarted": "2021-10-27T15:15:11+0000",
+      "title": "#5 : UDF example for verbose language detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tdetected_language\nI am very happy et joyeux\tlang_code=fr,score=0.5603816,lang_code=en,score=0.30602336\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_sentiment', message, 'en') as sentiment\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:17:29+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/e06bb6af2f24482f1b2a27c980127a58",
+              "$$hashKey": "object:8962"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347810426_607756475",
+      "id": "paragraph_1635347810426_607756475",
+      "dateCreated": "2021-10-27T15:16:50+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:8419",
+      "dateFinished": "2021-10-27T15:17:15+0000",
+      "dateStarted": "2021-10-27T15:17:02+0000",
+      "title": "#6 : UDF example for sentiment detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tsentiment\nI am very happy\t[POSITIVE]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_sentiment_all', message, 'en') as sentiment\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:17:40+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/947eb1dc939a8be7cd26072e032dd554",
+              "$$hashKey": "object:8971"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635346773250_1142868059",
+      "id": "paragraph_1635346773250_1142868059",
+      "dateCreated": "2021-10-27T14:59:33+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:611",
+      "dateFinished": "2021-10-27T15:00:44+0000",
+      "dateStarted": "2021-10-27T15:00:29+0000",
+      "title": "#7 : UDF example for verbose sentiment detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tsentiment\nI am very happy\t[sentiment=POSITIVE,positiveScore=0.999519,negativetiveScore=7.407639E-5,neutralScore=2.7478999E-4,mixedScore=1.3210243E-4]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_entities', message, 'en') as entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:17:45+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/92dcfa9d6702ee6c856216aeb44da125",
+              "$$hashKey": "object:8978"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635346829494_1357668481",
+      "id": "paragraph_1635346829494_1357668481",
+      "dateCreated": "2021-10-27T15:00:29+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:1172",
+      "dateFinished": "2021-10-27T15:03:10+0000",
+      "dateStarted": "2021-10-27T15:02:56+0000",
+      "title": "#8 : UDF example for entities detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tentities\nI am Bob, I live in Herndon VA, and I love cars\t[[[\"PERSON\",\"Bob\"],[\"LOCATION\",\"Herndon VA\"]]]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_entities_all', message, 'en') as entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:17:50+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/fe2fdfff566a9865a9540fe527dc284b",
+              "$$hashKey": "object:8985"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635346964085_1307548865",
+      "id": "paragraph_1635346964085_1307548865",
+      "dateCreated": "2021-10-27T15:02:44+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:1763",
+      "dateFinished": "2021-10-27T15:04:20+0000",
+      "dateStarted": "2021-10-27T15:04:05+0000",
+      "title": "#9 : UDF example for verbose entities detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tentities\nI am Bob, I live in Herndon VA, and I love cars\t[score=0.9976127,type=PERSON,text=Bob,beginOffset=5,endOffset=8, score=0.995559,type=LOCATION,text=Herndon VA,beginOffset=20,endOffset=30]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_pii_entities', message, 'en') as pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:17:57+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/a614fb9dff9bb60ce9ac0d17159bceaa",
+              "$$hashKey": "object:8992"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347045289_1550538095",
+      "id": "paragraph_1635347045289_1550538095",
+      "dateCreated": "2021-10-27T15:04:05+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:2348",
+      "dateFinished": "2021-10-27T15:05:40+0000",
+      "dateStarted": "2021-10-27T15:05:27+0000",
+      "title": "#10 : UDF example for pii entities detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tpii_entities\nI am Bob, I live in Herndon VA, and I love cars\t[[[\"NAME\",\"Bob\"],[\"ADDRESS\",\"Herndon VA\"]]]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('detect_pii_entities_all', message, 'en') as pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:18:03+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/5bb5b27a79d1e52ea4e27c931ac655d8",
+              "$$hashKey": "object:9005"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347127289_1476039370",
+      "id": "paragraph_1635347127289_1476039370",
+      "dateCreated": "2021-10-27T15:05:27+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:2891",
+      "dateFinished": "2021-10-27T15:06:48+0000",
+      "dateStarted": "2021-10-27T15:06:35+0000",
+      "title": "#11 : UDF example for verbose pii entities detection",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tpii_entities\nI am Bob, I live in Herndon VA, and I love cars\t[score=0.9999832,type=NAME,beginOffset=5,endOffset=8, score=0.9999931,type=ADDRESS,beginOffset=20,endOffset=30]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('redact_entities', message, 'en') as redacted_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:18:07+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/7807bd784fd753aead051d29e32f5fa0",
+              "$$hashKey": "object:9012"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347195008_1437956258",
+      "id": "paragraph_1635347195008_1437956258",
+      "dateCreated": "2021-10-27T15:06:35+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:3418",
+      "dateFinished": "2021-10-27T15:07:41+0000",
+      "dateStarted": "2021-10-27T15:07:28+0000",
+      "title": "#12 : UDF example for entities redaction",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tredacted_entities\nI am Bob, I live in Herndon VA, and I love cars\t[I am [PERSON], I live in [LOCATION], and I love cars]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('redact_pii_entities', message, 'en') as redacted_pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:18:11+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/796641dfbc372e0116770ab24244c080",
+              "$$hashKey": "object:9019"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347248743_2086020210",
+      "id": "paragraph_1635347248743_2086020210",
+      "dateCreated": "2021-10-27T15:07:28+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:3923",
+      "dateFinished": "2021-10-27T15:08:18+0000",
+      "dateStarted": "2021-10-27T15:08:04+0000",
+      "title": "#13 : UDF example for pii entities redaction",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\tredacted_pii_entities\nI am Bob, I live in Herndon VA, and I love cars\t[I am [NAME], I live in [ADDRESS], and I love cars]\n"
+          }
+        ]
+      }
+    },
+    {
+      "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    text_analytics_udf('translate_text', message, 'fr', 'null') as translated_text_to_french\nFROM \n\t(\n\tVALUES\n        ('It is a beautiful day in neighborhood')\n    )AS NameTable(message)\n;\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T15:18:17+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 85.6,
+              "optionOpen": false
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/421438bdb393bbb09ba6f0fa1753b7b2",
+              "$$hashKey": "object:9036"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635347284148_696559286",
+      "id": "paragraph_1635347284148_696559286",
+      "dateCreated": "2021-10-27T15:08:04+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:4422",
+      "dateFinished": "2021-10-27T15:11:16+0000",
+      "dateStarted": "2021-10-27T15:11:02+0000",
+      "title": "#14 : UDF example for text translation",
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "message\ttranslated_text_to_french\nIt is a beautiful day in neighborhood\tC'est une belle journée dans le quartier\n"
+          }
+        ]
+      }
+    }
+  ],
+  "name": "1-UDF-notebook",
+  "id": "2GKTTCBQ7",
+  "defaultInterpreterGroup": "flink",
+  "version": "0.9.0",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": false,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {},
+  "path": "/1-UDF-notebook"
+}
