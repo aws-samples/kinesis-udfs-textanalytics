@@ -1,0 +1,182 @@
+﻿{
+  "paragraphs": [
+    {
+      "text": "%flink.ssql\n\nDROP TABLE IF EXISTS amazon_reviews_raw_stream_91ff95a0;\n\nCREATE TABLE amazon_reviews_raw_stream_91ff95a0 (\n    marketplace STRING,\n    customer_id STRING,\n    review_id STRING,\n    product_id STRING,\n    product_parent STRING,\n    product_title STRING,\n    product_category STRING,\n    star_rating INT,\n    helpful_votes INT,\n    total_votes INT,\n    vine STRING,\n    verified_purchase STRING,\n    review_headline STRING,\n    review_body STRING,\n    review_date STRING,\n    ingest_time BIGINT,\n    event_ts AS TO_TIMESTAMP(FROM_UNIXTIME(COALESCE(ingest_time, UNIX_TIMESTAMP())/1000, 'yyyy-MM-dd HH:mm:ss.ms')),\n    WATERMARK FOR event_ts AS event_ts - INTERVAL '1' SECOND\n)\nPARTITIONED BY (product_id)\nWITH (\n    'connector'= 'kinesis',\n    'stream' = 'amazon_reviews_raw_stream_91ff95a0',\n    'format' = 'csv',\n    'csv.field-delimiter' = U&'\\0009',\n    'csv.ignore-parse-errors' = 'true',\n    'scan.shard.getrecords.maxretries' = '100',\n    'aws.region' = 'us-east-1',\n    'scan.stream.initpos' = 'TRIM_HORIZON'\n)",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T06:05:44+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {},
+        "enabled": true,
+        "title": true,
+        "lineNumbers": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "Table has been dropped.\nTable has been created.\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635263899472_1433253369",
+      "id": "paragraph_1634848643261_1479150109",
+      "dateCreated": "2021-10-26T15:58:19+0000",
+      "dateStarted": "2021-10-27T04:54:41+0000",
+      "dateFinished": "2021-10-27T04:54:47+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:906",
+      "title": "#1 : Create table for Kinesis stream containing raw records"
+    },
+    {
+      "text": "%flink.ssql(type=update)\n\n-- add language detection and translation results to streaming data\n\nDROP VIEW IF EXISTS amazon_reviews_enriched;\n\nCREATE VIEW  \n    amazon_reviews_enriched\nAS\n    SELECT\n        text_analytics_udf(\n            'translate_text', \n            review_body, \n            'fr', \n            'null'\n        ) as review_body_in_french,\n        *\n    FROM\n        (\n            SELECT\n                text_analytics_udf(\n                    'detect_dominant_language',\n                    review_body\n                ) as review_body_detected_language,\n                *\n            FROM\n                 amazon_reviews_raw_stream_91ff95a0\n        )\n    WHERE \n        review_body_detected_language IN ('ar', 'hi', 'ko', 'zh-TW', 'ja', 'zh', 'de', 'pt', 'en', 'it', 'fr', 'es')\n;     \n    \n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T06:06:00+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {},
+        "enabled": true,
+        "title": true,
+        "lineNumbers": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "View has been dropped.\nView has been created.\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635263899472_1844171849",
+      "id": "paragraph_1634848770317_1831686367",
+      "dateCreated": "2021-10-26T15:58:19+0000",
+      "dateStarted": "2021-10-27T05:07:07+0000",
+      "dateFinished": "2021-10-27T05:07:14+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:907",
+      "title": "#2 : Use UDF to enrich raw records in Kinesis stream with language detection and translation "
+    },
+    {
+      "text": "%flink.ssql\nDESCRIBE amazon_reviews_enriched;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T06:08:27+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "Column": "string",
+                      "Type": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true,
+        "title": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "Column\tType\nreview_body_fr\tSTRING\nreview_body_detected_language\tSTRING\nmarketplace\tSTRING\ncustomer_id\tSTRING\nreview_id\tSTRING\nproduct_id\tSTRING\nproduct_parent\tSTRING\nproduct_title\tSTRING\nproduct_category\tSTRING\nstar_rating\tINT\nhelpful_votes\tINT\ntotal_votes\tINT\nvine\tSTRING\nverified_purchase\tSTRING\nreview_headline\tSTRING\nreview_body\tSTRING\nreview_date\tSTRING\ningest_time\tBIGINT\nevent_ts\tTIMESTAMP(3)\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635263899472_554989711",
+      "id": "paragraph_1634848850962_142754227",
+      "dateCreated": "2021-10-26T15:58:19+0000",
+      "dateStarted": "2021-10-26T15:59:26+0000",
+      "dateFinished": "2021-10-26T15:59:27+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:908",
+      "title": "#3 : Preview schema for extra added columns"
+    }
+  ],
+  "name": "2-base-SQL-notebook",
+  "id": "2GN4MCMU6",
+  "defaultInterpreterGroup": "flink",
+  "version": "0.9.0",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": false,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {},
+  "path": "/2-base-SQL-notebook"
+}

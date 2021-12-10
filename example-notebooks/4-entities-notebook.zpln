@@ -1,0 +1,294 @@
+﻿{
+  "paragraphs": [
+    {
+      "title": "#1 : Create view for entity detection using UDF",
+      "text": "%flink.ssql(type=update)\n\n-- Prepare entities for analysis\n\nDROP VIEW IF EXISTS entities_view;\n\nCREATE VIEW  \n    entities_view\nAS\n    SELECT\n        review_id,\n        review_date,\n        product_title, \n        review_headline, \n        review_body,\n        review_body_detected_language,\n        STR_TO_MAP(tab.entities)['text'] as entity_text,\n        STR_TO_MAP(tab.entities)['type'] as entity_type,\n        STR_TO_MAP(tab.entities)['score'] as entity_score,\n        STR_TO_MAP(tab.entities)['beginOffset'] as entity_beginOffset,\n        STR_TO_MAP(tab.entities)['endOffset'] as entity_endOffset\n    FROM\n        (\n            SELECT\n                text_analytics_udf(\n                    'detect_entities_all',\n                    review_body, \n                    review_body_detected_language\n                ) as detected_entities_array,\n                *\n            FROM\n                amazon_reviews_enriched\n        )\n    CROSS JOIN \n        UNNEST(detected_entities_array) AS tab (entities)\n    WHERE \n        CARDINALITY(detected_entities_array) > 0;\n;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T07:04:14+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "View has been dropped.\nView has been created.\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635317239130_1221927427",
+      "id": "paragraph_1634848727500_2043349877",
+      "dateCreated": "2021-10-27T06:47:19+0000",
+      "status": "FINISHED",
+      "focus": true,
+      "$$hashKey": "object:52",
+      "dateFinished": "2021-10-27T07:04:23+0000",
+      "dateStarted": "2021-10-27T07:04:14+0000"
+    },
+    {
+      "title": "#2 : Preview entities",
+      "text": "%flink.ssql(type=update)\n\nSELECT \n    *\nFROM\n    entities_view\nORDER BY\n    review_id\nLIMIT\n    10\n;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T07:04:36+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {
+          "0": {
+            "graph": {
+              "mode": "table",
+              "height": 300,
+              "optionOpen": false,
+              "setting": {
+                "table": {
+                  "tableGridState": {},
+                  "tableColumnTypeState": {
+                    "names": {
+                      "review_id": "string",
+                      "review_date": "string",
+                      "product_title": "string",
+                      "star_rating": "string",
+                      "review_headline": "string",
+                      "review_body": "string",
+                      "review_body_detected_language": "string",
+                      "entity_text": "string",
+                      "entity_type": "string",
+                      "entity_score": "string",
+                      "entity_beginOffset": "string",
+                      "entity_endOffset": "string"
+                    },
+                    "updated": false
+                  },
+                  "tableOptionSpecHash": "[{\"name\":\"useFilter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable filter for columns\"},{\"name\":\"showPagination\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable pagination for better navigation\"},{\"name\":\"showAggregationFooter\",\"valueType\":\"boolean\",\"defaultValue\":false,\"widget\":\"checkbox\",\"description\":\"Enable a footer for displaying aggregated values\"}]",
+                  "tableOptionValue": {
+                    "useFilter": false,
+                    "showPagination": false,
+                    "showAggregationFooter": false
+                  },
+                  "updated": false,
+                  "initialized": false
+                }
+              },
+              "commonSetting": {}
+            }
+          }
+        },
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "ERROR",
+        "msg": [
+          {
+            "type": "TABLE",
+            "data": "review_id\treview_date\tproduct_title\treview_headline\treview_body\treview_body_detected_language\tentity_text\tentity_type\tentity_score\tentity_beginOffset\tentity_endOffset\nR10BWJIZZEBJED\t2015-08-31\tToe Separators - Durable Comfortble Gel Separator for Pedicures and Stretching - Set of 2 - Better Than Foam and Easy To Clean - Salon Style Pedicure\tand has been delighted with them\tMy wife s grabbed these at a store last week, and has been delighted with them. They are quite sturdy and comfortable, so her toes stay apart while painting them but, at the same time, causing no discomfort at all.<br />She s quite happy with them so far, and plans to buy another pair for her sister as a gift.\ten\tlast week\tDATE\t0.9972335\t35\t44\nR10BWJIZZEBJED\t2015-08-31\tToe Separators - Durable Comfortble Gel Separator for Pedicures and Stretching - Set of 2 - Better Than Foam and Easy To Clean - Salon Style Pedicure\tand has been delighted with them\tMy wife s grabbed these at a store last week, and has been delighted with them. They are quite sturdy and comfortable, so her toes stay apart while painting them but, at the same time, causing no discomfort at all.<br />She s quite happy with them so far, and plans to buy another pair for her sister as a gift.\ten\tpair\tQUANTITY\t0.5063407\t281\t285\nR13AY1N5UF3ISG\t2015-08-30\tViva Naturals #1 Best Selling Certified Organic Cacao Powder from Superior Criollo Beans, 1 LB Bag\tThe best! Taste great too\tAbsolutely love this! Can't live without it.. It gives u natural energy and has lots of vitamins I put it in my coffee and smoothies I make!!!\ten\tvitamins\tQUANTITY\t0.71756005\t88\t96\nR170MMX5J894TL\t2015-08-30\tboostULTIMATE - 60 Capsules - Increase Workout Stamina, Muscle Size, Energy & More 1 Month Supply\tArrived fresh and well packaged. The Tongkat Ali, ...\tArrived fresh and well packaged.  The Tongkat Ali, L-Arginine and Ginseng mix seems to work well before and after workouts.\ten\tTongkat Ali\tORGANIZATION\t0.6746487\t38\t49\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tSaturday\tDATE\t0.99471706\t17\t25\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tCostco\tORGANIZATION\t0.97121656\t29\t35\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tnext day\tDATE\t0.9537563\t91\t99\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tboth\tQUANTITY\t0.9760765\t157\t161\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tboth legs\tQUANTITY\t0.9933839\t239\t248\nR1D8ZBAEWYJIUE\t2015-08-30\tINFINITE ALOE SKIN CARE - ORIGINAL - (1 - 8oz jar) + (2 - 0.5oz jars)\tBest cream/skin care ever\tWe tried it on a Saturday at Costco.  I wasn't sure because of the price.  I went back the next day with my college-age daughter and ended up buying it.  We both love it.  She recently, inexplicably had stretch marks appear on the back of both legs.  After one week of applying the cream 2x per day, the stretch marks are almost completely gone!\ten\tone week\tQUANTITY\t0.86919034\t257\t265\n"
+          },
+          {
+            "type": "TEXT",
+            "data": "Fail to run sql command: SELECT \n    *\nFROM\n    entities_view\nORDER BY\n    review_id\nLIMIT\n    10\n"
+          },
+          {
+            "type": "ANGULAR",
+            "data": "<div class='container ng-scope' style='padding-left:0px;padding-right:0px;'>\n    <div class='panel panel-danger'>\n        <div class='panel-heading' ng-click='isOpen=!isOpen' ng-init='isOpen=false' style=\"cursor:pointer\">\n            <div class='plainTextContainer' style='font-weight:bolder'><i class=\"fa fa-caret-right fa-fw\" style=\"padding-right:7px;transition:all 0.3s;{{isOpen?'transform:rotate(90deg);transform-origin:25% 45%':''}}\"></i>Job was cancelled.</div>\n        </div>\n        <div class='panel-collapse' uib-collapse='!isOpen'>\n            <div class='text' style='max-height:300px;overflow:auto;padding:10px'>java.io.IOException: Fail to run stream sql job\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:172)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:105)\n\tat org.apache.zeppelin.flink.FlinkStreamSqlInterpreter.callInnerSelect(FlinkStreamSqlInterpreter.java:89)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callSelect(FlinkSqlInterrpeter.java:503)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.callCommand(FlinkSqlInterrpeter.java:266)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.runSqlList(FlinkSqlInterrpeter.java:160)\n\tat org.apache.zeppelin.flink.FlinkSqlInterrpeter.internalInterpret(FlinkSqlInterrpeter.java:112)\n\tat org.apache.zeppelin.interpreter.AbstractInterpreter.interpret(AbstractInterpreter.java:47)\n\tat org.apache.zeppelin.interpreter.LazyOpenInterpreter.interpret(LazyOpenInterpreter.java:110)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:852)\n\tat org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer$InterpretJob.jobRun(RemoteInterpreterServer.java:744)\n\tat org.apache.zeppelin.scheduler.Job.run(Job.java:172)\n\tat org.apache.zeppelin.scheduler.AbstractScheduler.runJob(AbstractScheduler.java:132)\n\tat org.apache.zeppelin.scheduler.ParallelScheduler.lambda$runJobInScheduler$0(ParallelScheduler.java:46)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\tat java.base/java.lang.Thread.run(Thread.java:829)\nCaused by: java.util.concurrent.ExecutionException: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: fb2a8df3df4113f703c5b18bdd7786bc)\n\tat java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:395)\n\tat java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1999)\n\tat org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.execute(StreamExecutionEnvironment.java:1719)\n\tat org.apache.flink.table.planner.delegation.ExecutorBase.execute(ExecutorBase.java:52)\n\tat org.apache.flink.table.api.internal.TableEnvironmentImpl.execute(TableEnvironmentImpl.java:1214)\n\tat org.apache.zeppelin.flink.sql.AbstractStreamSqlJob.run(AbstractStreamSqlJob.java:161)\n\t... 16 more\nCaused by: org.apache.flink.client.program.ProgramInvocationException: Job failed (JobID: fb2a8df3df4113f703c5b18bdd7786bc)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:116)\n\tat java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.client.program.rest.RestClusterClient.lambda$pollResourceAsync$22(RestClusterClient.java:602)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2073)\n\tat org.apache.flink.runtime.concurrent.FutureUtils.lambda$retryOperationWithDelay$8(FutureUtils.java:309)\n\tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)\n\tat java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)\n\tat java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)\n\tat java.base/java.util.concurrent.CompletableFuture.postFire(CompletableFuture.java:610)\n\tat java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1085)\n\tat java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:478)\n\t... 3 more\nCaused by: org.apache.flink.runtime.client.JobCancellationException: Job was cancelled.\n\tat org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:149)\n\tat org.apache.flink.client.deployment.ClusterClientJobClientAdapter.lambda$getJobExecutionResult$6(ClusterClientJobClientAdapter.java:114)\n\t... 18 more\n</div>\n        </div>\n    </div>\n</div>\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/fb2a8df3df4113f703c5b18bdd7786bc",
+              "$$hashKey": "object:3556"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635317239130_1040730098",
+      "id": "paragraph_1634849004691_516875710",
+      "dateCreated": "2021-10-27T06:47:19+0000",
+      "status": "ABORT",
+      "$$hashKey": "object:53",
+      "dateFinished": "2021-10-27T07:05:32+0000",
+      "dateStarted": "2021-10-27T07:04:37+0000"
+    },
+    {
+      "title": "#3 : Prepare destination table for sending entity results to S3 bucket",
+      "text": "%flink.ssql(type=update)\n\nDROP TABLE IF EXISTS amazon_reviews_entities;\n\nCREATE TABLE amazon_reviews_entities (\n    review_id STRING,\n    review_date STRING,\n    product_title STRING,\n    review_headline STRING,\n    review_body STRING,\n    review_body_detected_language STRING,\n    entity_text STRING,\n    entity_type STRING,\n    entity_score STRING,\n    entity_beginOffset STRING,\n    entity_endOffset STRING\n)\nPARTITIONED BY (review_date) \nWITH (\n    'connector'='filesystem',\n    'path'='s3://amazon-reviews-bucket-91ff95a0/data/amazon_reviews_entities/',\n    'format'='json'\n);",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T07:06:00+0000",
+      "progress": 0,
+      "config": {
+        "lineNumbers": true,
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "results": {
+        "code": "SUCCESS",
+        "msg": [
+          {
+            "type": "TEXT",
+            "data": "Table has been dropped.\nTable has been created.\n"
+          }
+        ]
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635317239131_1276808136",
+      "id": "paragraph_1634849028797_109335545",
+      "dateCreated": "2021-10-27T06:47:19+0000",
+      "status": "FINISHED",
+      "$$hashKey": "object:54",
+      "dateFinished": "2021-10-27T07:06:02+0000",
+      "dateStarted": "2021-10-27T07:06:00+0000"
+    },
+    {
+      "title": " #4 : Send entities to destination S3 bucket",
+      "text": "%flink.ssql(type=update, parallelism=1)\n\nINSERT INTO \n    amazon_reviews_entities\nSELECT \n    *\nFROM\n    entities_view\n;",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T07:25:02+0000",
+      "progress": 0,
+      "config": {
+        "editorSetting": {
+          "language": "sql",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "colWidth": 12,
+        "editorMode": "ace/mode/sql",
+        "fontSize": 9,
+        "title": true,
+        "results": {},
+        "enabled": true
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {
+        "jobUrl": {
+          "propertyName": "jobUrl",
+          "label": "FLINK JOB",
+          "tooltip": "View in Flink web UI",
+          "group": "flink",
+          "values": [
+            {
+              "jobUrl": "/flinkdashboard/#/job/f2937e04ec44938b49e980de6458de1c",
+              "$$hashKey": "object:3829"
+            }
+          ],
+          "interpreterSettingId": "flink"
+        }
+      },
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635317239131_1370718193",
+      "id": "paragraph_1634849057835_1869800742",
+      "dateCreated": "2021-10-27T06:47:19+0000",
+      "status": "RUNNING",
+      "$$hashKey": "object:55",
+      "dateFinished": "2021-10-27T07:09:57+0000",
+      "dateStarted": "2021-10-27T07:25:02+0000"
+    },
+    {
+      "text": "%flink.ssql\n",
+      "user": "anonymous",
+      "dateUpdated": "2021-10-27T07:06:09+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12,
+        "fontSize": 9,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "scala",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/scala"
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_1635318369995_756361681",
+      "id": "paragraph_1635318369995_756361681",
+      "dateCreated": "2021-10-27T07:06:09+0000",
+      "status": "READY",
+      "focus": true,
+      "$$hashKey": "object:3631"
+    }
+  ],
+  "name": "4-entities-notebook",
+  "id": "2GK6RQCSV",
+  "defaultInterpreterGroup": "flink",
+  "version": "0.9.0",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": false,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {},
+  "path": "/4-entities-notebook"
+}
