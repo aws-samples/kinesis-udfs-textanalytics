@@ -176,6 +176,8 @@ Resources:
                   - glue:GetTables
                   - glue:CreateTable
                   - glue:UpdateTable
+                  - glue:GetPartitions
+                  - glue:DeleteTable
                   - glue:GetUserDefinedFunction
                 Resource: 
                   - !Join ['', ["arn:aws:glue:", !Ref AWS::Region, ":", !Ref AWS::AccountId, ":table/", !Ref GlueDatabase, "/*"]]
