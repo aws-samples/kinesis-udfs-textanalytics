@@ -30,7 +30,7 @@
       "status": "FINISHED",
       "focus": true,
       "$$hashKey": "object:52",
-      "text": "%flink.ssql(type=update)\n\nDROP VIEW IF EXISTS redact_pii_entities_view;\n\nCREATE VIEW  \n    redact_pii_entities_view\nAS\n    SELECT\n        review_id,\n        review_date,\n        review_body,\n        text_analytics_udf(\n            'redact_pii_entities', \n            review_body, \n            review_body_detected_language\n        ) AS redacted_pii_entities\n    FROM\n        amazon_reviews_enriched\n    WHERE\n        review_body_detected_language = 'en'\n;\n-- https://docs.aws.amazon.com/comprehend/latest/dg/API_DetectPiiEntities.html#comprehend-DetectPiiEntities-request-LanguageCode\n",
+      "text": "%flink.ssql(type=update)\n\nDROP VIEW IF EXISTS redact_pii_entities_view;\n\nCREATE VIEW  \n    redact_pii_entities_view\nAS\n    SELECT\n        review_id,\n        review_date,\n        review_body,\n        TextAnalyticsUDF(\n            'redact_pii_entities', \n            review_body, \n            review_body_detected_language\n        ) AS redacted_pii_entities\n    FROM\n        amazon_reviews_enriched\n    WHERE\n        review_body_detected_language = 'en'\n;\n-- https://docs.aws.amazon.com/comprehend/latest/dg/API_DetectPiiEntities.html#comprehend-DetectPiiEntities-request-LanguageCode\n",
       "dateUpdated": "2021-10-27T07:40:37+0000",
       "dateFinished": "2021-10-27T07:40:45+0000",
       "dateStarted": "2021-10-27T07:40:37+0000",
