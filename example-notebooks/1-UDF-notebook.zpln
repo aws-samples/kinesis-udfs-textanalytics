@@ -2,7 +2,7 @@
   "paragraphs": [
     {
       "title": "#1 : Setup User Defined Function to interact with SQL",
-      "text": "%flink(parallelism=1)\nimport com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDFHandler\nstenv.registerFunction(\"TextAnalyticsUDF\", new TextAnalyticsUDF())",
+      "text": "%flink(parallelism=1)\nimport com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDF\nstenv.registerFunction(\"TextAnalyticsUDF\", new TextAnalyticsUDF())",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:31+0000",
       "progress": 0,
