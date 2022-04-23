@@ -14,6 +14,8 @@ This repository contains following artifacts :
 3. Java project for UDF under ``kinesis-udfs-textanalytics-linear`` directory
 4. Cloudformation template to automate deployments under ``cloudformation-stack`` directory
     
+Repository additionally contains ``custom_artifacts_helper.py`` python script to enable a customized setup (refer [below](https://github.com/aws-samples/kinesis-udfs-textanalytics#user-content-customized-setup-))
+	
 ## Example output on Amazon Product Reviews data-set :
 
 Sentiment analysis and dominant language detection :
@@ -28,7 +30,9 @@ PII entity Redaction :
 ## Setup guide :
 
 ### Default setup  : 
-Execute ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` cloudformation stack [in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html) to deploy required resources. This approach will pull default artifacts from public AWS S3 bucket ``bkt-name-here`` which includes the pre-built JAR for the UDF JAVA project under ``kinesis-udfs-textanalytics-linear`` directory. 
+
+1. Clone repo locally using ``git clone https://github.com/aws-samples/kinesis-udfs-textanalytics.git``  
+2. Choose ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` template [to execute a cloudformation stack in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html). This approach will pull default artifacts from public AWS S3 bucket ``bkt-name-here`` which includes the pre-built JAR for the UDF JAVA project under ``kinesis-udfs-textanalytics-linear`` directory. 
 
 
 ### Customized setup :
@@ -38,8 +42,8 @@ If you need to deploy customized artifacts, perform following :
     
 2. Modify the contents of artifacts locally as required. To create JAR, refer Create JAR section of [project README](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/main/kinesis-udfs-textanalytics-linear/README.md)
 
-3. Once modifications are done, execute ``custom_artifacts_helper.py`` python script to programmatically upload these modified artifacts to S3 bucket within your account and also update the [Parameter](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/2f54bc2ca83719c03d0565e49da864df2baebab9/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml#L8) section of Cloudformation template.
-    
-4. Now execute ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` cloudformation stack [in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html)
-    
-Note : The ``custom_artifacts_helper.py`` python script scans for artifacts by their default names in current directory, so during content modification ensure the name of artifacts remain same. Also the script requires the IAM entitiy to have [Read and Write access](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) to S3 bucket. 
+3. Once modifications are done, execute ``custom_artifacts_helper.py`` python script which programmatically uploads these modified artifacts to a specified S3 bucket within your account and also updates the [Parameter](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/2f54bc2ca83719c03d0565e49da864df2baebab9/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml#L8) section of Cloudformation template.
+
+      Note : The ``custom_artifacts_helper.py`` python script scans for artifacts by their default names in current directory, so during content modification ensure the name of artifacts remain same. Also, the script requires the IAM entitiy to have [Read and Write access](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) to S3 bucket. 
+
+4. Confirm creation of modified Cloudformation stack template as ``/folder/KDA_StudioNotebook_with_UDF.yaml`` along with other artifacts in your specified S3 bucket. Copy the Object URL of this template object from Amazon S3 console and [use it to execute a cloudformation stack](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) in your AWS account.
