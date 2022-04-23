@@ -31,7 +31,7 @@ PII entity Redaction :
 Execute ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` cloudformation stack [in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html) to deploy required resources. This approach will pull default artifacts from public AWS S3 bucket ``bkt-name-here`` which includes the pre-built JAR for the UDF JAVA project under ``kinesis-udfs-textanalytics-linear`` directory. 
 
 
-## Customized setup :
+### Customized setup :
 If you need to deploy customized artifacts, perform following :
 
 1. Clone repo locally using ``git clone https://github.com/aws-samples/kinesis-udfs-textanalytics.git``  
