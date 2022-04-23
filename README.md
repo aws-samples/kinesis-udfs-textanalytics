@@ -38,7 +38,7 @@ If you need to deploy customized artifacts, perform following :
     
 2. Modify the contents of artifacts locally as required. To create JAR, refer Create JAR section of [project README](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/main/kinesis-udfs-textanalytics-linear/README.md)
 
-3. Once modifications are done, execute ``custom_artifacts_helper.py`` python script to programmatically upload these modified artifacts to S3 bucket within your account and also update the [Parameter](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/2f54bc2ca83719c03d0565e49da864df2baebab9/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml#L3) section of Cloudformation template.
+3. Once modifications are done, execute ``custom_artifacts_helper.py`` python script to programmatically upload these modified artifacts to S3 bucket within your account and also update the [Parameter](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/2f54bc2ca83719c03d0565e49da864df2baebab9/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml#L8) section of Cloudformation template.
     
 4. Now execute ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` cloudformation stack [in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html)
     
