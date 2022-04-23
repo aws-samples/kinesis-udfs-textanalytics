@@ -30,12 +30,12 @@ Parameters:
   ZeroNotebookArtifact:
     Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
     Type: String
-    Default: 0-data-load-notebook.zpln
+    Default: 0-UDF-notebook.zpln
 
   FirstNotebookArtifact:
     Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
     Type: String
-    Default: 1-UDF-notebook.zpln
+    Default:  1-data-load-notebook.zpln
 
   SecondNotebookArtifact:
     Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
@@ -82,7 +82,6 @@ Resources:
                 - !Ref "AWS::StackId"
       ShardCount: 1
 
-  # Glue Catalog
   GlueDatabase:
     Type: 'AWS::Glue::Database'
     Properties:
@@ -102,8 +101,7 @@ Resources:
                   - "/"
                   - !Ref "AWS::StackId"
         Description: Database for integration test
-
-  # Resources for Studio Instance 
+ 
   KinesisAnalyticsRole:
     Type: AWS::IAM::Role
     Properties:
@@ -299,8 +297,8 @@ Resources:
         LocalJARfile: 'text-analytics-udfs-linear-1.0.jar'
         LocalPersonalCareReviewsFile: 'amazon_reviews_us_Personal_Care_Appliances_trimmed.tsv'
         LocalGroceryReviewsFile: 'amazon_reviews_us_Grocery_trimmed.tsv'
-        LocalZeroNotebookFile: '0-data-load-notebook.json'
-        LocalFirstNotebookFile: '1-UDF-notebook.json'
+        LocalZeroNotebookFile: '0-UDF-notebook.json'
+        LocalFirstNotebookFile: '1-data-load-notebook.json'
         LocalSecondNotebookFile: '2-base-SQL-notebook.json'
         LocalThirdNotebookFile: '3-sentiments-notebook.json'
         LocalFourthNotebookFile: '4-entities-notebook.json'
@@ -409,9 +407,6 @@ Resources:
             zero_data_load_notebook_object = s3.Object(artifact_bucket, artifact_prefix +'/'+ zero_data_load_notebook_key)
             zero_data_load_notebook_file = zero_data_load_notebook_object.get()['Body'].read().decode('utf-8-sig')
             zero_data_load_notebook = json.loads(zero_data_load_notebook_file)
-            zero_data_load_notebook['paragraphs'][0]['text'] = zero_data_load_notebook['paragraphs'][0]['text'].replace("us-east-1",region)
-            zero_data_load_notebook['paragraphs'][0]['text'] = zero_data_load_notebook['paragraphs'][0]['text'].replace("amazon_reviews_raw_stream_91ff95a0","amazon_reviews_raw_stream_"+stack_code)
-            zero_data_load_notebook['paragraphs'][1]['text'] = zero_data_load_notebook['paragraphs'][1]['text'].replace("amazon-reviews-bucket-91ff95a0","amazon-reviews-bucket-"+stack_code)
             print(f"Copying customized s3://{artifact_bucket}/{artifact_prefix}/{zero_data_load_notebook_key} to s3://{local_bucket}/artifacts/{local_zero_data_load_notebook_file}")
             zero_data_load_notebook_object_local = s3.Object(local_bucket, 'artifacts/'+local_zero_data_load_notebook_file)
             zero_data_load_notebook_object_local.put(Body=(bytes(json.dumps(zero_data_load_notebook).encode('utf-8'))), ContentType='application/json')
@@ -424,7 +419,9 @@ Resources:
             one_UDF_notebook_file = one_UDF_notebook_object.get()['Body'].read().decode('utf-8-sig')
             one_UDF_notebook = json.loads(one_UDF_notebook_file)
             caps_region = region.replace("-","_").upper()
-            one_UDF_notebook['paragraphs'][1]['text'] = one_UDF_notebook['paragraphs'][1]['text'].replace("US_EAST_1",caps_region)
+            one_UDF_notebook['paragraphs'][0]['text'] = one_UDF_notebook['paragraphs'][0]['text'].replace("us-east-1",region)
+            one_UDF_notebook['paragraphs'][0]['text'] = one_UDF_notebook['paragraphs'][0]['text'].replace("amazon_reviews_raw_stream_91ff95a0","amazon_reviews_raw_stream_"+stack_code)
+            one_UDF_notebook['paragraphs'][1]['text'] = one_UDF_notebook['paragraphs'][1]['text'].replace("amazon-reviews-bucket-91ff95a0","amazon-reviews-bucket-"+stack_code)
             print(f"Copying customized s3://{artifact_bucket}/{artifact_prefix}/{one_UDF_notebook_key} to s3://{local_bucket}/artifacts/{local_one_UDF_notebook_file}")
             one_UDF_notebook_object_local = s3.Object(local_bucket, 'artifacts/'+local_one_UDF_notebook_file)
             one_UDF_notebook_object_local.put(Body=(bytes(json.dumps(one_UDF_notebook).encode('utf-8'))), ContentType='application/json')
@@ -500,7 +497,6 @@ Resources:
                 responseData['Data'] = "Success"
             cfnresponse.send(event, context, status, responseData)
 
-  # Studio Instance
   StudioApplication:
     Type: AWS::KinesisAnalyticsV2::Application
     DependsOn:
@@ -817,3 +813,22 @@ Resources:
                   - !Join ['', ["arn:aws:s3:::", !Ref LocalS3BucketForStudioArtifacts]]
                   - !Join ['', ["arn:aws:s3:::", !Ref LocalS3BucketForStudioArtifacts, "/*"]] 
       Path: /
+
+
+Outputs:
+
+  GlueDatabase:
+    Description: The Glue database used in this example
+    Value: !Ref GlueDatabase
+
+  KinesisStream:
+    Description: The Kinesis data stream used in this example
+    Value: !Ref SourceKinesisStream
+
+  S3Bucket:
+    Description: The S3 bucket used in this example to store artifacts
+    Value: !Ref LocalS3BucketForStudioArtifacts
+  
+  StudioApplication:
+    Description: The Kinesis Data Analytics Studio instance used in this example
+    Value: !Ref StudioApplication

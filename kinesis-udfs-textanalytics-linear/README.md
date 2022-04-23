@@ -5,7 +5,7 @@ This package provides a java class with public methods to be used in Kinesis Dat
 #### Build from source
 
 1. From the kinesis-udfs-textanalytics dir, run `mvn clean install`.
-2. Run built-in tests using the class main method: run `java -cp target/text-analytics-udfs-linear-1.0.jar com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDFHandler` 
+2. Run built-in tests using the class main method: run `java -cp target/text-analytics-udfs-linear-1.0.jar com.amazonaws.kinesis.udf.textanalytics.TextAnalyticsUDF` 
 
 
 

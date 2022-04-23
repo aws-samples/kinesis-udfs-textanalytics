@@ -46,7 +46,7 @@
       "$$hashKey": "object:657"
     },
     {
-      "title": "#3 : Enable checkpointing for S3 sink",
+      "title": "#2 : Enable checkpointing for S3 sink",
       "text": "%flink\n// start a checkpoint every 1 minute\nsenv.enableCheckpointing(60000)",
       "user": "anonymous",
       "dateUpdated": "2022-03-24T04:50:42+0000",
@@ -90,7 +90,7 @@
       "$$hashKey": "object:659"
     },
     {
-      "title": "#4 : UDF example for language detection",
+      "title": "#3 : UDF example for language detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_dominant_language', message) as detected_language\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:34+0000",
@@ -177,7 +177,7 @@
       "$$hashKey": "object:660"
     },
     {
-      "title": "#5 : UDF example for verbose language detection",
+      "title": "#4 : UDF example for verbose language detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_dominant_language_all', message) as detected_language\nFROM \n\t(\n\tVALUES\n        ('I am very happy et joyeux')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:37+0000",
@@ -248,7 +248,7 @@
       "$$hashKey": "object:661"
     },
     {
-      "title": "#6 : UDF example for sentiment detection",
+      "title": "#5 : UDF example for sentiment detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_sentiment', message, 'en') as sentiment\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:40+0000",
@@ -319,7 +319,7 @@
       "$$hashKey": "object:662"
     },
     {
-      "title": "#7 : UDF example for verbose sentiment detection",
+      "title": "#6 : UDF example for verbose sentiment detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_sentiment_all', message, 'en') as sentiment\nFROM \n\t(\n\tVALUES\n        ('I am very happy')\n    )AS NameTable(message)\n;",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:42+0000",
@@ -390,7 +390,7 @@
       "$$hashKey": "object:663"
     },
     {
-      "title": "#8 : UDF example for entities detection",
+      "title": "#7 : UDF example for entities detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_entities', message, 'en') as entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:46+0000",
@@ -461,7 +461,7 @@
       "$$hashKey": "object:664"
     },
     {
-      "title": "#9 : UDF example for verbose entities detection",
+      "title": "#8 : UDF example for verbose entities detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_entities_all', message, 'en') as entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:49+0000",
@@ -532,7 +532,7 @@
       "$$hashKey": "object:665"
     },
     {
-      "title": "#10 : UDF example for pii entities detection",
+      "title": "#9 : UDF example for pii entities detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_pii_entities', message, 'en') as pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:43:53+0000",
@@ -603,7 +603,7 @@
       "$$hashKey": "object:666"
     },
     {
-      "title": "#11 : UDF example for verbose pii entities detection",
+      "title": "#10 : UDF example for verbose pii entities detection",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('detect_pii_entities_all', message, 'en') as pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:44:01+0000",
@@ -674,7 +674,7 @@
       "$$hashKey": "object:667"
     },
     {
-      "title": "#12 : UDF example for entities redaction",
+      "title": "#11 : UDF example for entities redaction",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('redact_entities', message, 'en') as redacted_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:44:04+0000",
@@ -745,7 +745,7 @@
       "$$hashKey": "object:668"
     },
     {
-      "title": "#13 : UDF example for pii entities redaction",
+      "title": "#12 : UDF example for pii entities redaction",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('redact_pii_entities', message, 'en') as redacted_pii_entities\nFROM \n\t(\n\tVALUES\n        ('I am Bob, I live in Herndon VA, and I love cars')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:44:08+0000",
@@ -816,7 +816,7 @@
       "$$hashKey": "object:669"
     },
     {
-      "title": "#14 : UDF example for text translation",
+      "title": "#13 : UDF example for text translation",
       "text": "%flink.ssql(type=update)\nSELECT\n    message,\n    TextAnalyticsUDF('translate_text', message, 'fr', 'null') as translated_text_to_french\nFROM \n\t(\n\tVALUES\n        ('It is a beautiful day in neighborhood')\n    )AS NameTable(message)\n;\n",
       "user": "anonymous",
       "dateUpdated": "2022-04-06T10:44:19+0000",
@@ -887,7 +887,7 @@
       "$$hashKey": "object:670"
     }
   ],
-  "name": "1-UDF-notebook",
+  "name": "0-UDF-notebook",
   "id": "2H1E2H2ZR",
   "defaultInterpreterGroup": "flink",
   "version": "0.9.0",
@@ -900,5 +900,5 @@
     "personalizedMode": "false"
   },
   "info": {},
-  "path": "/1-UDF-notebook"
+  "path": "/0-UDF-notebook"
 }
