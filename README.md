@@ -18,7 +18,7 @@ Repository additionally contains ``custom_artifacts_helper.py`` python script to
 	
 ## Example output on Amazon Product Reviews data-set :
 
-   Note : For example output on non-streaming static data, refer below 
+   Note : For example output on non-streaming static data, refer [below](https://github.com/aws-samples/kinesis-udfs-textanalytics/blob/main/README.md#user-content-example-output-on-non-streaming-static-data-) 
 
 Sentiment detection and language translation :
 
