@@ -1,64 +1,64 @@
-Description:  This template deploys a Amazon Kinesis Analytics Studio Notebook to illustrate User Defined Function interaction with AWS Comprehend and AWS Translate APIs
+Description:  This template deploys a Amazon Kinesis Analytics Studio Notebook with User Defined Function to illustrate interaction of AWS Comprehend and AWS Translate APIs with streaming data
 
 Parameters:
 
   ArtifactsBucket:
-    Description: The bucket name where UDF JAR is stored, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: The bucket name where UDF JAR is stored
     Type: String
-    Default: khokharn-artifact-bucket
+    Default: aws-blogs-artifacts-public
 
   ArtifactsPrefix:
-    Description: The key prefix inside S3 bucket where UDF JAR is present, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: The key prefix inside S3 bucket where UDF JAR is present
     Type: String
-    Default: folder
+    Default: artifacts/ML-4786
 
   JarArtifact:
-    Description: The key name inside S3 bucket which represents the UDF JAR, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: The key name inside S3 bucket which represents the UDF JAR
     Type: String
     Default: text-analytics-udfs-linear-1.0.jar
 
   PersonalCareReviewsArtifact:
-    Description: The key name inside S3 bucket which represents the trimmed down PersonalCareReviews TSV file, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: The key name inside S3 bucket which represents the trimmed down PersonalCareReviews TSV file
     Type: String
     Default: amazon_reviews_us_Personal_Care_Appliances_trimmed.tsv
 
   GroceryReviewsArtifact:
-    Description: The key name inside S3 bucket which represents the trimmed down GroceryReviews TSV file, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: The key name inside S3 bucket which represents the trimmed down GroceryReviews TSV file
     Type: String
     Default: amazon_reviews_us_Grocery_trimmed.tsv
 
   ZeroNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to load UDF JAR into Amazon Kinesis Analytics Studio Notebook environment  
     Type: String
     Default: 0-UDF-notebook.zpln
 
   FirstNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to load sample dataset into Amazon Kinesis Data Stream
     Type: String
     Default:  1-data-load-notebook.zpln
 
   SecondNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to create view on streaming data using UDF
     Type: String
     Default: 2-base-SQL-notebook.zpln
 
   ThirdNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to create view on streaming data using UDF for sentiment detection use-case
     Type: String
     Default: 3-sentiments-notebook.zpln
 
   FourthNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to create view on streaming data using UDF for entity detection use-case
     Type: String
     Default: 4-entities-notebook.zpln
 
   FifthNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to create view on streaming data using UDF for entity redaction use-case
     Type: String
     Default: 5-redact-entities-notebook.zpln
 
   SixthNotebookArtifact:
-    Description: abc, to be removed once access allowed for aws-bigdata-blog artifacts bucket
+    Description: Apache Zeppelin notebook to create view on streaming data using UDF for PII entity redaction use-case
     Type: String
     Default: 6-redact-pii-entities-notebook.zpln
 
