@@ -1,4 +1,4 @@
-Description:  This template deploys a Amazon Kinesis Analytics Studio Notebook with User Defined Function to illustrate interaction of AWS Comprehend and AWS Translate APIs with streaming data
+Description:  Sample Amazon Kinesis Analytics UDFs for text translation and analytics using Amazon Comprehend and Amazon Translate (v0.1.0)
 
 Parameters:
 
