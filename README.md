@@ -41,7 +41,7 @@ PII entity Redaction :
 ### Default setup  : 
 
 1. Clone repo locally using ``git clone https://github.com/aws-samples/kinesis-udfs-textanalytics.git``  
-2. Choose ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` template [to execute a cloudformation stack in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html). This approach will pull default artifacts from public AWS S3 bucket ``bkt-name-here`` which includes the pre-built JAR for the UDF JAVA project under ``kinesis-udfs-textanalytics-linear`` directory. 
+2. Choose ``cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml`` template [to execute a cloudformation stack in your AWS account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html). This approach will pull default artifacts from public AWS S3 bucket ``aws-blogs-artifacts-public`` which includes the pre-built JAR for the UDF JAVA project under ``kinesis-udfs-textanalytics-linear`` directory. 
 
 
 ### Customized setup :
@@ -55,7 +55,7 @@ If you need to deploy customized artifacts, perform following :
 
       Note : The ``custom_artifacts_helper.py`` python script scans for artifacts by their default names in current directory, so during content modification ensure the name of artifacts remain same. Also, the script requires the IAM entitiy to have [Read and Write access](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) to S3 bucket. 
 
-4. Confirm creation of modified Cloudformation stack template as ``/folder/KDA_StudioNotebook_with_UDF.yaml`` along with other artifacts in your specified S3 bucket. Copy the Object URL of this template object from Amazon S3 console and [use it to execute a cloudformation stack](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) in your AWS account.
+4. Confirm creation of modified Cloudformation stack template as ``/<your-specified-prefiex>/KDA_StudioNotebook_with_UDF.yaml`` along with other artifacts in your specified S3 bucket. Copy the Object URL of this template object from Amazon S3 console and [use it to execute a cloudformation stack](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) in your AWS account.
 
 ## Example output on non-streaming static data :
 
