@@ -6,6 +6,7 @@ import fileinput
 # Get bucket & region inputs
 bucket_name = input("Enter S3 bucket name : ")
 region_name = input("Enter region code for bucket, example us-east-1 : ")
+prefix_name = input("Enter the S3 prefix under which the artifacts are to be stored : ")
 
 # Create S3 client
 client = boto3.client('s3', region_name=region_name)
@@ -13,7 +14,7 @@ client = boto3.client('s3', region_name=region_name)
 # Method for S3 upload
 def upload(client, local_file_name, s3_file_name, bucket_name):
     try:
-        response = client.upload_file(local_file_name, bucket_name, 'folder/'+s3_file_name)
+        response = client.upload_file(local_file_name, bucket_name, prefix_name+'/'+s3_file_name)
         print(local_file_name +" uploaded to bucket " +bucket_name)
     except ClientError as e:
         logging.error(e)
