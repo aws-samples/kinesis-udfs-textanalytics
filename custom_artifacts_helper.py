@@ -39,5 +39,6 @@ upload(client, base_path+'/kinesis-udfs-textanalytics-linear/target/text-analyti
 
 # Modify CFN for new bucket name and Upload
 for line in fileinput.input(base_path+"/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml", inplace=True):
-    print(line.replace("khokharn-artifact-bucket", bucket_name), end="")
+    print(line.replace("aws-blogs-artifacts-public", bucket_name), end="")
+    print(line.replace("artifacts/ML-4786", prefix_name), end="")
 upload(client, base_path+'/cloudformation-stack/KDA_StudioNotebook_with_UDF.yaml', 'KDA_StudioNotebook_with_UDF.yaml', bucket_name)
