@@ -26,8 +26,8 @@ Sentiment detection and language translation :
 
 Entity detection :
 
-<img width="917" alt="Architecture" src="https://user-images.githubusercontent.com/46901738/164889243-c5727ed9-4f77-49eb-8225-44ec5207c2d8.png">
-    
+<img width="917" alt="Architecture" src="https://user-images.githubusercontent.com/46901738/170194178-cf14aab4-078a-4d24-b9ec-7c5da6ab83b6.PNG">
+   
 Entity Redaction :
 
 <img width="917" alt="Architecture" src="https://user-images.githubusercontent.com/46901738/164889236-0dba919d-333e-4e30-baf5-d73520149488.png">
