@@ -206,6 +206,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:GetObjectVersion
+                  - s3:DeleteObject
                 Resource: 
                   - !Join ['', ["arn:aws:s3:::", !Ref LocalS3BucketForStudioArtifacts, "/*"]] 
               - 
