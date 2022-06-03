@@ -1,7 +1,7 @@
 # Translate and analyze streaming data using SQL functions with Amazon Kinesis Data Analytics, Amazon Translate, and Amazon Comprehend
 
 This example will show you how to leverage Amazon Kinesis Data Analytics Studio powered by Apache Zeppelin and Apache Flink to
-interactively analyze, translate, and redact streaming using Amazon Translate & Amazon Comprehend APIs. The approach involves creation of [Apache Flink user-defined functions](https://nightlies.apache.org/flink/flink-docs-release-1.11/dev/table/functions/udfs.html#user-defined-functions) (UDFs) to trigger these APIs. 
+interactively analyze, translate, and redact streaming using Amazon Translate & Amazon Comprehend APIs. The approach involves creation of [Apache Flink user-defined functions](https://nightlies.apache.org/flink/flink-docs-release-1.11/dev/table/functions/udfs.html#user-defined-functions) (UDFs) to trigger these APIs. For additional information, refer to blog post: www.amazon.com/kinesis-textanalyticsudf
 
 <img width="917" alt="Architecture" src="https://user-images.githubusercontent.com/46901738/151387452-1c3683ca-7571-4997-83fc-d0a2029ec9d1.png">
 
