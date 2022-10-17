@@ -355,7 +355,7 @@ Resources:
         - CopySourceJARFunctionRole
         - Arn
       Handler: index.on_event
-      Runtime: python3.8
+      Runtime: python3.9
       Timeout: 900
       Code:
         ZipFile: |
@@ -686,7 +686,7 @@ Resources:
                 - "/"
                 - !Ref "AWS::StackId"
       MemorySize: 128
-      Runtime: python3.6
+      Runtime: python3.9
       Description: Lambda function that executes during stack creation and deletion to achieve CleanupBucketOnStackDelete
       Handler: index.lambda_handler
       Role: !GetAtt HelperLambdaForKDAStudioAppStartUpRole.Arn
@@ -757,7 +757,7 @@ Resources:
                 - "/"
                 - !Ref "AWS::StackId"
       MemorySize: 128
-      Runtime: python3.6
+      Runtime: python3.9
       Description: Lambda function that executes during stack creation and deletion to achieve CleanupBucketOnStackDelete
       Handler: index.lambda_handler
       Role: !GetAtt HelperLambdaForCleanupBucketOnStackDeleteRole.Arn
